@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>市民大道城市縫合 3D</title>
+<style>
+  :root {
+    --bg: #eef1f4; --panel: #ffffffee; --ink: #1c2530; --sub: #5b6876; --line: #d9dfe6;
+    --accent: #e2572b; --accent-ink: #fff; --chip: #f2f5f8; --warn: #8a5a00; --warn-bg: #fff6df;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; }
+  .lbl { font-size: 11px; padding: 1px 5px; border-radius: 3px; white-space: nowrap; pointer-events: none;
+    background: #ffffffd0; color: #27323e; border: 1px solid #00000018; }
+  .lbl.road { background: #2b3440d0; color: #ffe27a; border: none; font-size: 10px; }
+  .lbl.prop { background: var(--accent); color: #fff; border: none; font-weight: 600; font-size: 11.5px; }
+  .lbl.zone { background: #b3261e; color: #fff; border: none; font-size: 14px; font-weight: 700; padding: 3px 9px; }
+  .lbl.meas { background: #111; color: #fff; border: none; font-size: 13px; font-weight: 600; }
+  #panel { position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 340px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column;
+    box-shadow: 0 6px 24px #0000001f; backdrop-filter: blur(6px); }
+  #panel header { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 0 4px; letter-spacing: .02em; }
+  header p { margin: 0; font-size: 12px; color: var(--sub); line-height: 1.5; }
+  #scroll { overflow-y: auto; padding: 12px 16px 16px; flex: 1; }
+  h2 { font-size: 12px; color: var(--sub); margin: 16px 0 6px; font-weight: 600; letter-spacing: .08em; }
+  h2:first-child { margin-top: 0; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .zones { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  button { font: inherit; font-size: 13px; padding: 7px 6px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--chip); color: var(--ink); cursor: pointer; }
+  button:hover { border-color: #aab4bf; }
+  button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .layers { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 13px; }
+  .layers label { display: flex; align-items: center; gap: 6px; padding: 3px 0; cursor: pointer; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  td { padding: 4px 0; border-bottom: 1px solid var(--line); }
+  td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .plist { display: flex; flex-direction: column; gap: 4px; }
+  .pitem { text-align: left; display: flex; gap: 8px; align-items: center; padding: 7px 9px; }
+  .pitem small { color: var(--sub); margin-left: auto; font-size: 11px; white-space: nowrap; }
+  .pitem.on small { color: #ffe; }
+  #card { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(16px + env(safe-area-inset-top, 0px)); width: 330px; max-height: calc(100% - 32px); overflow: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    box-shadow: 0 6px 24px #0000001f; display: none; }
+  #card h3 { margin: 0 24px 6px 0; font-size: 15px; }
+  #card .tag { display: inline-block; font-size: 11px; background: var(--chip); border: 1px solid var(--line);
+    border-radius: 99px; padding: 1px 8px; margin: 0 4px 6px 0; color: var(--sub); }
+  #card p { font-size: 13px; line-height: 1.65; margin: 6px 0; }
+  #card .note { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; }
+  #card .x { position: absolute; right: 10px; top: 8px; border: none; background: none; font-size: 18px; padding: 2px 6px; }
+  .foot { font-size: 11.5px; color: var(--sub); line-height: 1.6; background: var(--chip); border-radius: 8px; padding: 8px 10px; }
+  #hint { position: fixed; left: 364px; bottom: 14px; font-size: 12px; color: var(--sub); background: #ffffffcc;
+    padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); }
+  #load { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); font-size: 14px; color: var(--sub); z-index: 9; }
+  @media (max-width: 760px) {
+    #panel { width: auto; right: max(16px, env(safe-area-inset-right, 0px)); top: auto; height: 46%; }
+    #card { left: max(16px, env(safe-area-inset-left, 0px)); width: auto; max-height: 44%; }
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="load">載入圖資與建立模型中…</div>
+<div id="stage"></div>
+
+<aside id="panel">
+  <header>
+    <h1>市民大道「城市縫合」3D 檢視</h1>
+    <p>現況依 OpenStreetMap 圖資建模（1 單位＝1 公尺）；提案量體為依政策文字推估的示意，非官方設計。</p>
+  </header>
+  <div id="scroll">
+    <h2>檢視模式</h2>
+    <div class="seg">
+      <button id="mNow">僅現況</button>
+      <button id="mProp" class="on">現況＋提案</button>
+    </div>
+
+    <h2>示範區</h2>
+    <div class="zones" id="zones"></div>
+
+    <h2 id="statTitle">現況數據</h2>
+    <table id="stats"></table>
+
+    <h2>提案項目（點選可飛到該處）</h2>
+    <div class="plist" id="plist"></div>
+
+    <h2>圖層</h2>
+    <div class="layers" id="layers"></div>
+
+    <h2>工具</h2>
+    <div class="seg">
+      <button id="measure">量測距離</button>
+      <button id="topview">正上方視角</button>
+    </div>
+
+    <h2>資料限制</h2>
+    <div class="foot" id="foot"></div>
+  </div>
+</aside>
+
+<div id="card"><button class="x" id="cardX" aria-label="關閉">×</button><div id="cardBody"></div></div>
+<div id="hint">左鍵拖曳旋轉・右鍵拖曳平移・滾輪縮放・點選橘色量體看說明</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js/+esm';
+import { CSS2DRenderer, CSS2DObject } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js/+esm';
+
+const $ = s => document.querySelector(s);
+const [SC, OV] = await Promise.all([fetch('data/scene.json').then(r => r.json()), fetch('data/overlay.json').then(r => r.json())]);
+
+// ---------- 基本場景（模型座標 x=東, y=北, z=高 → three: x, z, -y） ----------
+const V = (x, y, z = 0) => new THREE.Vector3(x, z, -y);
+const stage = $('#stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+const lr = new CSS2DRenderer();
+lr.domElement.style.cssText = 'position:absolute;inset:0;pointer-events:none';
+stage.appendChild(lr.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xe9eef3);
+scene.fog = new THREE.Fog(0xe9eef3, 2500, 9000);
+const camera = new THREE.PerspectiveCamera(42, 1, 2, 20000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI / 2 - 0.03;
+controls.minDistance = 40; controls.maxDistance = 6000;
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb9b4a8, 1.15));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(-600, 1200, 500); scene.add(sun);
+
+// ---------- 幾何緩衝 ----------
+class Buf {
+  constructor() { this.p = []; this.i = []; }
+  get n() { return this.p.length / 3; }
+  v(x, y, z) { const q = V(x, y, z); this.p.push(q.x, q.y, q.z); }
+  tri(a, b, c) { this.i.push(a, b, c); }
+  quad(a, b, c, d) { this.i.push(a, b, c, a, c, d); }
+  cap(pts, z, base) {
+    const tris = THREE.ShapeUtils.triangulateShape(pts.map(p => new THREE.Vector2(p[0], p[1])), []);
+    for (const t of tris) this.tri(base + t[0], base + t[1], base + t[2]);
+  }
+  flat(pts, z) { const b = this.n; for (const p of pts) this.v(p[0], p[1], z); this.cap(pts, z, b); }
+  prism(pts, z0, z1) {
+    const b = this.n, n = pts.length;
+    for (const p of pts) this.v(p[0], p[1], z0);
+    for (const p of pts) this.v(p[0], p[1], z1);
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n; this.quad(b + i, b + j, b + n + j, b + n + i); }
+    this.cap(pts, z1, b + n);
+  }
+  ribbon(pts, w, dz = 0, thick = 0) {
+    const n = pts.length; if (n < 2) return;
+    const L = [], R = [];
+    for (let i = 0; i < n; i++) {
+      let dx = 0, dy = 0;
+      if (i > 0) { const ax = pts[i][0] - pts[i - 1][0], ay = pts[i][1] - pts[i - 1][1], l = Math.hypot(ax, ay); if (l > 1e-6) { dx += ax / l; dy += ay / l; } }
+      if (i < n - 1) { const ax = pts[i + 1][0] - pts[i][0], ay = pts[i + 1][1] - pts[i][1], l = Math.hypot(ax, ay); if (l > 1e-6) { dx += ax / l; dy += ay / l; } }
+      const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+      const z = (pts[i][2] || 0) + dz;
+      L.push([pts[i][0] - dy * w / 2, pts[i][1] + dx * w / 2, z]);
+      R.push([pts[i][0] + dy * w / 2, pts[i][1] - dx * w / 2, z]);
+    }
+    const b = this.n;
+    for (const q of L) this.v(...q); for (const q of R) this.v(...q);
+    for (let i = 0; i < n - 1; i++) this.quad(b + i, b + n + i, b + n + i + 1, b + i + 1);
+    if (thick > 0) {
+      const c = this.n;
+      for (const q of L) this.v(q[0], q[1], q[2] - thick); for (const q of R) this.v(q[0], q[1], q[2] - thick);
+      for (let i = 0; i < n - 1; i++) {
+        this.quad(c + i + 1, c + n + i + 1, c + n + i, c + i);
+        this.quad(b + i + 1, c + i + 1, c + i, b + i);
+        this.quad(b + n + i, c + n + i, c + n + i + 1, b + n + i + 1);
+      }
+    }
+  }
+  box(cx, cy, sx, sy, z0, z1, ang = 0) {
+    const ca = Math.cos(ang), sa = Math.sin(ang);
+    const pts = [[-sx / 2, -sy / 2], [sx / 2, -sy / 2], [sx / 2, sy / 2], [-sx / 2, sy / 2]].map(([dx, dy]) => [cx + dx * ca - dy * sa, cy + dx * sa + dy * ca]);
+    this.prism(pts, z0, z1);
+  }
+  mesh(color, opt = {}) {
+    if (!this.p.length) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
+    g.setIndex(this.i);
+    const m = new THREE.MeshStandardMaterial({ color, flatShading: true, side: THREE.DoubleSide, roughness: .9, metalness: 0, ...opt });
+    return new THREE.Mesh(g, m);
+  }
+}
+
+// ---------- 圖層 ----------
+const LAYERS = [
+  ['bld', '建物', 0xdedbd4], ['key', '地標建物', 0xe8a064], ['viaduct', '高架橋', 0x8c93a0],
+  ['road', '平面道路', 0x474b52], ['walk', '人行道・步道', 0xb8a98c], ['cross', '行人穿越道', 0xf2c200],
+  ['green', '公園綠地', 0x74b35f], ['misc', '停車・工地・樹', 0x8f96a3], ['label', '地名標註', 0xffffff],
+  ['gap', '最大穿越間距', 0xd0021b],
+];
+const G = Object.fromEntries(LAYERS.map(l => [l[0], new THREE.Group()]));
+Object.values(G).forEach(g => scene.add(g));
+const add = (key, mesh) => { if (mesh) G[key].add(mesh); return mesh; };
+const AREA = { park: [0x7dbb68, .06, 'green'], grass: [0x93c97c, .08, 'green'], playground: [0xf0a85a, .12, 'green'], pitch: [0x4f9d8f, .1, 'green'],
+  water: [0x6aa6dc, .1, 'green'], plaza: [0xcfc6b2, .07, 'green'], parking: [0x8f96a3, .07, 'misc'], construction: [0xb9a27c, .04, 'misc'],
+  site: [0xcdb6c8, .02, 'green'], school: [0xd9cf9f, .03, 'green'] };
+
+for (const Z of SC.zones) {
+  const d = SC.data[Z.name];
+  const gb = new Buf(); gb.flat([[Z.x0, Z.y0], [Z.x1, Z.y0], [Z.x1, Z.y1], [Z.x0, Z.y1]], 0);
+  const ground = gb.mesh(0xd6d4cd); ground.userData.ground = true; scene.add(ground);
+  const ab = {};
+  for (const a of d.areas) { const s = AREA[a.k]; if (s) (ab[a.k] ??= new Buf()).flat(a.p, s[1]); }
+  for (const k in ab) add(AREA[k][2], ab[k].mesh(AREA[k][0]));
+  const b1 = new Buf(), b2 = new Buf(), bk = new Buf();
+  for (const b of d.buildings) (b.k ? bk : b.e ? b2 : b1).prism(b.p, 0, b.h);
+  add('bld', b1.mesh(0xe6e4de)); add('bld', b2.mesh(0xd3c4ae)); add('key', bk.mesh(0xe8a064));
+  const r1 = new Buf(), r2 = new Buf();
+  for (const r of d.road) (r.c ? r2 : r1).ribbon(r.p, r.w, .15);
+  add('road', r1.mesh(0x5a5f67)); add('road', r2.mesh(0x33373d));
+  const w = new Buf();
+  for (const k of ['footway', 'steps', 'cycleway']) for (const r of d[k] || []) w.ribbon(r.p, r.w, .2);
+  add('walk', w.mesh(0xbfae8e));
+  const c1 = new Buf(), c2 = new Buf();
+  const civ = d.road.filter(r => r.c).flatMap(r => r.p);
+  for (const r of d.crossing) {
+    const m = r.p[r.p.length >> 1];
+    (civ.some(q => Math.hypot(q[0] - m[0], q[1] - m[1]) < 14) ? c2 : c1).ribbon(r.p, 3, .28);
+  }
+  add('cross', c1.mesh(0xf2c200)); add('cross', c2.mesh(0xe5341f));
+  const dk = new Buf(), pr = new Buf();
+  for (const r of d.viaduct) {
+    dk.ribbon(r.p, r.w, 0, 1.8);
+    let acc = 17;
+    for (let i = 1; i < r.p.length; i++) {
+      const a = r.p[i - 1], b = r.p[i], seg = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      while (acc < seg) {
+        const t = acc / seg, z = a[2] + (b[2] - a[2]) * t;
+        if (z > 4) pr.box(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 2, Math.min(r.w * .45, 3.5), 0, z - 1.8, Math.atan2(b[1] - a[1], b[0] - a[0]));
+        acc += 35;
+      }
+      acc -= seg;
+    }
+  }
+  for (const r of d.rail_elevated || []) dk.ribbon(r.p.map(p => [p[0], p[1], 12]), 4.5, 0, 1.5);
+  add('viaduct', dk.mesh(0x9aa1ad, { transparent: true, opacity: .93 })); add('viaduct', pr.mesh(0x777c85));
+  const fb = new Buf(); for (const r of d.footbridge || []) fb.ribbon(r.p, Math.max(r.w, 3), 0, .6);
+  add('viaduct', fb.mesh(0x2a8fe0));
+  const tb = new Buf(); for (const [x, y] of d.trees) { tb.box(x, y, .5, .5, 0, 3); tb.box(x, y, 4, 4, 3, 8); }
+  add('misc', tb.mesh(0x3e7d3e));
+  const mb = new Buf(); for (const [x, y] of d.metro) mb.box(x, y, 5, 5, 0, 4);
+  add('misc', mb.mesh(0xd81b7a));
+}
+
+// ---------- 標註 ----------
+function label(text, x, y, z, cls) {
+  const el = document.createElement('div'); el.className = 'lbl ' + cls; el.textContent = text;
+  const o = new CSS2DObject(el); o.position.copy(V(x, y, z)); return o;
+}
+const placeLabels = [];
+for (const l of OV.labels) { const o = label(l.t, l.p[0], l.p[1], l.p[2], l.k); o.userData.k = l.k; G.label.add(o); placeLabels.push(o); }
+for (const Z of OV.zones) G.label.add(label(Z.name.split('_')[1] + '示範區', (Z.x0 + Z.x1) / 2, Z.y1 + 30, 20, 'zone'));
+
+// 最大穿越間距標示
+for (const Z of OV.zones) {
+  const s = OV.stats[Z.name], [a, b] = s.gap_line;
+  const g = new THREE.BufferGeometry().setFromPoints([V(a[0], a[1], 26), V(b[0], b[1], 26)]);
+  G.gap.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xd0021b })));
+  for (const q of [a, b]) { const pb = new Buf(); pb.box(q[0], q[1], 1.2, 1.2, 0, 26); G.gap.add(pb.mesh(0xd0021b)); }
+  const o = label('相鄰行穿線最大間距 ' + s.gap_max + ' m', (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 30, 'meas'); G.gap.add(o);
+}
+
+// ---------- 提案量體 ----------
+const PG = new THREE.Group(); scene.add(PG);
+const CAT = { '橋下活化': 0xff7a1a, '人行陸橋': 0x00a3ff, '串聯動線': 0x00b386, '節點活化': 0xb455e0, '平面穿越': 0xff2d55 };
+const pmesh = {};
+for (const p of OV.proposals) {
+  const col = CAT[p.cat] || 0xff7a1a, b = new Buf(), grp = new THREE.Group();
+  let top = 8;
+  if (p.kind === 'pad') {
+    b.ribbon(p.pts, p.w, .45, .3);
+    for (let k = 0; k < p.stalls; k++) {
+      const i = Math.floor((k + .5) / p.stalls * (p.pts.length - 1)), q = p.pts[i], r = p.pts[Math.min(i + 1, p.pts.length - 1)];
+      b.box(q[0], q[1], 9, p.w * .5, .45, 3.6, Math.atan2(r[1] - q[1], r[0] - q[0]));
+    }
+  } else if (p.kind === 'bridge') {
+    b.ribbon(p.pts.map(q => [q[0], q[1], p.z]), p.w, 0, .7);
+    const n = p.pts.length, sup = [0, n - 1, ...Array.from({ length: Math.max(0, Math.floor(n / 4)) }, (_, k) => (k + 1) * 4).filter(i => i < n - 1)];
+    for (const i of sup) b.box(p.pts[i][0], p.pts[i][1], 1.2, 1.2, 0, p.z - .7);
+    for (const [e, f] of [[0, 1], [n - 1, n - 2]]) {   // 兩端梯道示意
+      const q = p.pts[e], r = p.pts[f], l = Math.hypot(q[0] - r[0], q[1] - r[1]) || 1, ux = (q[0] - r[0]) / l, uy = (q[1] - r[1]) / l;
+      b.ribbon([[q[0], q[1], p.z], [q[0] + ux * 14, q[1] + uy * 14, 0.3]], p.w * .8, 0, .4);
+    }
+    top = p.z + 5;
+  } else if (p.kind === 'path') {
+    b.ribbon(p.pts, p.w, .5, .2);
+  } else if (p.kind === 'box') {
+    b.box(p.c[0], p.c[1], p.s[0], p.s[1], 0, p.h + .3); top = p.h + 6;
+  } else if (p.kind === 'marker') {
+    const ring = [], N = 28;
+    for (let i = 0; i <= N; i++) ring.push([p.c[0] + Math.cos(i / N * 6.2832) * p.r, p.c[1] + Math.sin(i / N * 6.2832) * p.r]);
+    b.ribbon(ring, 3, .6, .3); b.box(p.c[0], p.c[1], 1, 1, 0, 14); top = 16;
+  }
+  const m = b.mesh(col, { transparent: true, opacity: .88, emissive: col, emissiveIntensity: .25 });
+  m.userData.pid = p.id; grp.add(m);
+  if (!p.id.startsWith('c5_') || p.id === 'c5_0')
+    grp.add(label(p.id.startsWith('c5_') ? '平面穿越改善（6 處）' : p.title, p.focus[0], p.focus[1], top, 'prop'));
+  grp.userData.zone = p.zone; PG.add(grp); pmesh[p.id] = m;
+}
+
+// ---------- UI ----------
+const zoneBtns = $('#zones');
+const VIEWS = { all: { t: [30, 20], d: 2600 } };
+for (const Z of OV.zones) VIEWS[Z.name] = { t: [(Z.x0 + Z.x1) / 2, 30], d: 1050 };
+let curZone = 'all', fly = null;
+function flyTo(tx, ty, dist, pitch = .72, yaw = 0) {
+  const tgt = V(tx, ty, 0);
+  const off = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).multiplyScalar(dist);
+  fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: tgt.clone().add(off), t1: tgt, k: 0 };
+}
+function setZone(z) {
+  curZone = z;
+  [...zoneBtns.children].forEach(b => b.classList.toggle('on', b.dataset.z === z));
+  const v = VIEWS[z]; flyTo(v.t[0], v.t[1], v.d);
+  renderStats(); renderList();
+}
+for (const [z, name] of [['all', '全區'], ...OV.zones.map(Z => [Z.name, Z.name.split('_')[1]])]) {
+  const b = document.createElement('button'); b.textContent = name; b.dataset.z = z; b.onclick = () => setZone(z); zoneBtns.appendChild(b);
+}
+function renderStats() {
+  const zs = curZone === 'all' ? OV.zones.map(z => z.name) : [curZone];
+  const S = zs.map(z => OV.stats[z]), sum = k => S.reduce((a, s) => a + s[k], 0);
+  const known = Math.round(sum('bld_known') / sum('buildings') * 100);
+  const rows = [
+    ['東西向長度', sum('ew').toLocaleString() + ' m'],
+    ['跨市民大道行穿線（40 m 內併計）', sum('cross_n') + ' 處'],
+    ['相鄰行穿線平均間距', Math.round(S.reduce((a, s) => a + s.gap_avg * (s.cross_n - 1), 0) / S.reduce((a, s) => a + s.cross_n - 1, 0)) + ' m'],
+    ['相鄰行穿線最大間距', Math.max(...S.map(s => s.gap_max)) + ' m'],
+    ['既有人行陸橋（OSM 線段）', sum('footbridges') + ' 段'],
+    ['捷運出入口', sum('metro') + ' 個'],
+    ['建物數（有樓層/高度資料）', sum('buildings').toLocaleString() + '（' + known + '%）'],
+  ];
+  $('#stats').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+  $('#statTitle').textContent = '現況數據｜' + (curZone === 'all' ? '三區合計' : curZone.split('_')[1]);
+}
+let sel = null;
+function renderList() {
+  const el = $('#plist'); el.innerHTML = '';
+  const items = OV.proposals.filter(p => (curZone === 'all' || p.zone === curZone) && (!p.id.startsWith('c5_') || p.id === 'c5_0'));
+  for (const p of items) {
+    const b = document.createElement('button'); b.className = 'pitem' + (sel === p.id ? ' on' : '');
+    b.innerHTML = `<span class="sw" style="background:#${(CAT[p.cat] || 0).toString(16).padStart(6, '0')}"></span><span>${p.id.startsWith('c5_') ? '平面穿越改善（6 處）' : p.title}</span><small>${p.zone.split('_')[1]}</small>`;
+    b.onclick = () => select(p.id, true); el.appendChild(b);
+  }
+}
+function select(id, doFly) {
+  if (sel && pmesh[sel]) pmesh[sel].material.emissiveIntensity = .25;
+  sel = id; const p = OV.proposals.find(q => q.id === id);
+  if (!p) { $('#card').style.display = 'none'; renderList(); return; }
+  if (!showProp) setMode(true);
+  pmesh[id].material.emissiveIntensity = .9;
+  $('#cardBody').innerHTML = `<h3>${p.title}</h3><span class="tag">${p.zone.split('_')[1]}示範區</span><span class="tag">${p.cat}</span>
+    <p>${p.desc}</p><p class="note"><b>模型檢核：</b>${p.note}</p><p style="color:var(--sub);font-size:12px">來源：${p.src}</p>`;
+  $('#card').style.display = 'block';
+  if (doFly) flyTo(p.focus[0], p.focus[1], 330, .6, -.5);
+  renderList();
+}
+$('#cardX').onclick = () => select(null);
+let showProp = true;
+function setMode(v) { showProp = v; PG.visible = v; $('#mProp').classList.toggle('on', v); $('#mNow').classList.toggle('on', !v); if (!v) select(null); }
+$('#mNow').onclick = () => setMode(false); $('#mProp').onclick = () => setMode(true);
+
+const layEl = $('#layers');
+for (const [k, name, col] of LAYERS) {
+  const l = document.createElement('label');
+  l.innerHTML = `<input type="checkbox" checked><span class="sw" style="background:#${col.toString(16).padStart(6, '0')};border:1px solid #0002"></span>${name}`;
+  l.querySelector('input').onchange = e => { G[k].visible = e.target.checked; G[k].traverse(o => { if (o.isCSS2DObject) o.visible = e.target.checked; }); };
+  layEl.appendChild(l);
+}
+const A = OV.assumptions;
+$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。以下為<b>假設值</b>：高架橋面高度（一般段 ${A.DECK_H[1]} m、跨越其他高架處 ${A.DECK_H[2]} m）、橋墩位置（每 35 m 示意）、無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色）、道路寬度由車道數估算。橋下既有設施與地下鐵路、捷運隧道未建模。提案量體的位置與尺寸為本模型依政策文字推估，僅供討論。`;
+
+// 量測
+let measuring = false, mpts = []; const MG = new THREE.Group(); scene.add(MG);
+$('#measure').onclick = () => { measuring = !measuring; $('#measure').classList.toggle('on', measuring); mpts = []; MG.clear(); stage.style.cursor = measuring ? 'crosshair' : ''; };
+$('#topview').onclick = () => { const t = controls.target; flyTo(t.x, -t.z, camera.position.distanceTo(t), 1.535, 0); };
+
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(); let down = null;
+renderer.domElement.addEventListener('pointerdown', e => down = [e.clientX, e.clientY]);
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  if (measuring) {
+    const pt = new THREE.Vector3();
+    if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), pt)) return;
+    if (mpts.length === 2) { mpts = []; MG.clear(); }
+    mpts.push(pt); const pb = new Buf(); pb.box(pt.x, -pt.z, 2.5, 2.5, 0, 12); MG.add(pb.mesh(0x111111));
+    if (mpts.length === 2) {
+      const a = mpts[0].clone().setY(12), b = mpts[1].clone().setY(12);
+      MG.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color: 0x111111 })));
+      const mid = a.clone().lerp(b, .5), o = label(mpts[0].distanceTo(mpts[1]).toFixed(1) + ' m', mid.x, -mid.z, 16, 'meas'); MG.add(o);
+    }
+    return;
+  }
+  if (!showProp) return;
+  const hit = ray.intersectObjects(Object.values(pmesh), false)[0];
+  if (hit) select(hit.object.userData.pid, false);
+});
+
+function resize() {
+  const w = innerWidth, h = innerHeight; renderer.setSize(w, h); lr.setSize(w, h); camera.aspect = w / h;
+  if (w > 760) camera.setViewOffset(w, h, -176, 0, w, h); else camera.setViewOffset(w, h, 0, h * .22, w, h);  // 讓出側欄
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+camera.position.copy(V(30, -2200, 1900)); controls.target.copy(V(30, 20, 0));
+setZone('all');
+$('#load').remove();
+window.__app = { camera, controls, select, setZone, setMode, OV };
+
+(function loop() {
+  requestAnimationFrame(loop);
+  if (fly) {
+    fly.k = Math.min(1, fly.k + .035); const e = 1 - Math.pow(1 - fly.k, 3);
+    camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.t0, fly.t1, e);
+    if (fly.k >= 1) fly = null;
+  }
+  controls.update();
+  const dist = camera.position.distanceTo(controls.target);
+  if (G.label.visible) for (const o of placeLabels) o.visible = o.userData.k === 'road' ? dist < 900 : dist < 1900;
+  renderer.render(scene, camera); lr.render(scene, camera);
+})();
+</script>
+</body>
+</html>

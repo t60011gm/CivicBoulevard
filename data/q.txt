@@ -1,0 +1,21 @@
+[out:json][timeout:120][bbox:25.0400,121.5220,25.0500,121.5565];
+(
+  way["building"];
+  relation["building"];
+  way["building:part"];
+  way["highway"];
+  way["railway"];
+  way["leisure"];
+  way["landuse"];
+  way["amenity"];
+  way["natural"];
+  way["man_made"="bridge"];
+  way["barrier"];
+  relation["leisure"];
+  relation["landuse"];
+  node["highway"="crossing"];
+  node["highway"="traffic_signals"];
+  node["railway"="subway_entrance"];
+  node["natural"="tree"];
+);
+out body geom;
