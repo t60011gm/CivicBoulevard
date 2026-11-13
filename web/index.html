@@ -46,7 +46,7 @@
   .pitem { text-align: left; display: flex; gap: 8px; align-items: center; padding: 7px 9px; }
   .pitem small { color: var(--sub); margin-left: auto; font-size: 11px; white-space: nowrap; }
   .pitem.on small { color: #ffe; }
-  #card { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(16px + env(safe-area-inset-top, 0px)); width: 330px; max-height: calc(100% - 32px); overflow: auto;
+  #card { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(16px + env(safe-area-inset-top, 0px)); width: 370px; max-height: calc(100% - 32px); overflow: auto;
     background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
     box-shadow: 0 6px 24px #0000001f; display: none; }
   #card h3 { margin: 0 24px 6px 0; font-size: 15px; }
@@ -55,6 +55,17 @@
   #card p { font-size: 13px; line-height: 1.65; margin: 6px 0; }
   #card .note { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; }
   #card .x { position: absolute; right: 10px; top: 8px; border: none; background: none; font-size: 18px; padding: 2px 6px; }
+  #card h4 { font-size: 12.5px; margin: 12px 0 4px; color: var(--sub); letter-spacing: .04em; }
+  .chk { list-style: none; margin: 0; padding: 0; font-size: 12.5px; line-height: 1.55; }
+  .chk li { padding: 4px 0 4px 22px; position: relative; border-bottom: 1px solid var(--line); }
+  .chk li::before { position: absolute; left: 2px; top: 4px; font-weight: 700; }
+  .chk li.ok::before { content: "✓"; color: #1a8a4a; }
+  .chk li.no::before { content: "✗"; color: #c62828; }
+  .chk li.no { color: #7a1f1f; }
+  .spec td { vertical-align: top; font-size: 12px; font-weight: 400; }
+  .spec td:last-child { font-weight: 600; white-space: normal; width: 38%; }
+  .spec small { color: var(--sub); font-weight: 400; }
+  .spec small.unv { color: #b26a00; }
   .foot { font-size: 11.5px; color: var(--sub); line-height: 1.6; background: var(--chip); border-radius: 8px; padding: 8px 10px; }
   #hint { position: fixed; left: 364px; bottom: 14px; font-size: 12px; color: var(--sub); background: #ffffffcc;
     padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); }
@@ -73,7 +84,7 @@
 <aside id="panel">
   <header>
     <h1>市民大道「城市縫合」3D 檢視</h1>
-    <p>現況依 OpenStreetMap 圖資建模（1 單位＝1 公尺）；提案量體為依政策文字推估的示意，非官方設計。</p>
+    <p>現況依 OpenStreetMap 圖資與街景判讀建模（1 單位＝1 公尺）；提案設施依設計規範試排尺寸，位置為推估，非官方設計。</p>
   </header>
   <div id="scroll">
     <h2>檢視模式</h2>
@@ -106,7 +117,7 @@
 </aside>
 
 <div id="card"><button class="x" id="cardX" aria-label="關閉">×</button><div id="cardBody"></div></div>
-<div id="hint">左鍵拖曳旋轉・右鍵拖曳平移・滾輪縮放・點選橘色量體看說明</div>
+<div id="hint">左鍵拖曳旋轉・右鍵拖曳平移・滾輪縮放・點選提案設施看規範檢核</div>
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm';
@@ -304,40 +315,29 @@ for (const Z of OV.zones) {
 
 // ---------- 提案量體 ----------
 const PG = new THREE.Group(); scene.add(PG);
-const CAT = { '橋下活化': 0xff7a1a, '人行陸橋': 0x00a3ff, '串聯動線': 0x00b386, '節點活化': 0xb455e0, '平面穿越': 0xff2d55 };
-const pmesh = {};
+const CAT = { '橋下活化': 0xff7a1a, '人行陸橋': 0x1e9bf0, '串聯動線': 0x00b386, '節點活化': 0xb455e0, '平面穿越': 0xff2d55 };
+const pmesh = {}, pickList = [];
+const ROLE = { pad: [0xd9d2c3], rubber: [0xe9a25b], grassy: [0x8cc27a], court: [0x3f8fb0], usezone: [0xf6c26b], equip: [0xd9483b],
+  fence: [0x4d5663], gate: [0x20242a], walk: [0xc9b48a], stall: [0xff7a1a], stage: [0x7a4fd0], seat: [0xb18be8],
+  deck: [0x1e9bf0], stair: [0x6cc4ff], railing: [0x1b6fa8], col: [0x6b7480], lift: [0x0b5fa5, .85], zebra: [0xffffff],
+  island: [0x9aa3ad], curb: [0xe8e0c8], bollard: [0xffcc00], reuse: [0xb455e0, .6], infeasible: [0xe5341f, .55] };
 for (const p of OV.proposals) {
-  const col = CAT[p.cat] || 0xff7a1a, b = new Buf(), grp = new THREE.Group();
-  let top = 8;
-  if (p.kind === 'pad') {
-    b.ribbon(p.pts, p.w, .45, .3);
-    for (let k = 0; k < p.stalls; k++) {
-      const i = Math.floor((k + .5) / p.stalls * (p.pts.length - 1)), q = p.pts[i], r = p.pts[Math.min(i + 1, p.pts.length - 1)];
-      b.box(q[0], q[1], 9, p.w * .5, .45, 3.6, Math.atan2(r[1] - q[1], r[0] - q[0]));
-    }
-  } else if (p.kind === 'bridge') {
-    b.ribbon(p.pts.map(q => [q[0], q[1], p.z]), p.w, 0, .7);
-    const n = p.pts.length, sup = [0, n - 1, ...Array.from({ length: Math.max(0, Math.floor(n / 4)) }, (_, k) => (k + 1) * 4).filter(i => i < n - 1)];
-    for (const i of sup) b.box(p.pts[i][0], p.pts[i][1], 1.2, 1.2, 0, p.z - .7);
-    for (const [e, f] of [[0, 1], [n - 1, n - 2]]) {   // 兩端梯道示意
-      const q = p.pts[e], r = p.pts[f], l = Math.hypot(q[0] - r[0], q[1] - r[1]) || 1, ux = (q[0] - r[0]) / l, uy = (q[1] - r[1]) / l;
-      b.ribbon([[q[0], q[1], p.z], [q[0] + ux * 14, q[1] + uy * 14, 0.3]], p.w * .8, 0, .4);
-    }
-    top = p.z + 5;
-  } else if (p.kind === 'path') {
-    b.ribbon(p.pts, p.w, .5, .2);
-  } else if (p.kind === 'box') {
-    b.box(p.c[0], p.c[1], p.s[0], p.s[1], 0, p.h + .3); top = p.h + 6;
-  } else if (p.kind === 'marker') {
-    const ring = [], N = 28;
-    for (let i = 0; i <= N; i++) ring.push([p.c[0] + Math.cos(i / N * 6.2832) * p.r, p.c[1] + Math.sin(i / N * 6.2832) * p.r]);
-    b.ribbon(ring, 3, .6, .3); b.box(p.c[0], p.c[1], 1, 1, 0, 14); top = 16;
+  const grp = new THREE.Group(), bufs = {};
+  let top = 5;
+  for (const q of p.parts) {
+    const b = (bufs[q.r] ??= new Buf());
+    if (q.k === 'rib') { b.ribbon(q.pts, q.w, 0, q.t); top = Math.max(top, ...q.pts.map(v => v[2] + 3)); }
+    else { b.box(q.c[0], q.c[1], q.s[0], q.s[1], q.z[0], q.z[1], q.a); top = Math.max(top, q.z[1] + 3); }
   }
-  const m = b.mesh(col, { transparent: true, opacity: .88, emissive: col, emissiveIntensity: .25 });
-  m.userData.pid = p.id; grp.add(m);
+  pmesh[p.id] = [];
+  for (const r in bufs) {
+    const [col, op] = ROLE[r] || [0xff7a1a];
+    const m = bufs[r].mesh(col, op ? { transparent: true, opacity: op } : {});
+    m.userData.pid = p.id; grp.add(m); pmesh[p.id].push(m); pickList.push(m);
+  }
   if (!p.id.startsWith('c5_') || p.id === 'c5_0')
-    grp.add(label(p.id.startsWith('c5_') ? '平面穿越改善（6 處）' : p.title, p.focus[0], p.focus[1], top, 'prop'));
-  grp.userData.zone = p.zone; PG.add(grp); pmesh[p.id] = m;
+    grp.add(label(p.id.startsWith('c5_') ? '平面穿越改善（6 處）' : p.title, p.focus[0], p.focus[1], Math.min(top, 14), 'prop'));
+  grp.userData.zone = p.zone; PG.add(grp);
 }
 
 // ---------- UI ----------
@@ -386,15 +386,21 @@ function renderList() {
   }
 }
 function select(id, doFly) {
-  if (sel && pmesh[sel]) pmesh[sel].material.emissiveIntensity = .25;
+  if (sel && pmesh[sel]) for (const m of pmesh[sel]) m.material.emissive.setHex(0x000000);
   sel = id; const p = OV.proposals.find(q => q.id === id);
   if (!p) { $('#card').style.display = 'none'; renderList(); return; }
   if (!showProp) setMode(true);
-  pmesh[id].material.emissiveIntensity = .9;
+  for (const m of pmesh[id]) { m.material.emissive.setHex(0xff6a00); m.material.emissiveIntensity = .35; }
+  const fails = p.checks.filter(c => !c[0]).length;
   $('#cardBody').innerHTML = `<h3>${p.title}</h3><span class="tag">${p.zone.split('_')[1]}示範區</span><span class="tag">${p.cat}</span>
-    <p>${p.desc}</p><p class="note"><b>模型檢核：</b>${p.note}</p><p style="color:var(--sub);font-size:12px">來源：${p.src}</p>`;
-  $('#card').style.display = 'block';
-  if (doFly) flyTo(p.focus[0], p.focus[1], 330, .6, -.5);
+    <p>${p.desc}</p><p><b>試排結果：</b>${p.note}</p>
+    <h4>規範檢核（${p.checks.length - fails} 項符合、${fails} 項待解決）</h4>
+    <ul class="chk">${p.checks.map(c => `<li class="${c[0] ? 'ok' : 'no'}">${c[1]}</li>`).join('')}</ul>
+    <h4>採用的規範數值</h4>
+    <table class="spec">${p.specs.map(r => `<tr><td><b>${r[0]}</b><br><small>${r[2]}</small>${r[3] ? '' : '<br><small class="unv">未對照條文原文</small>'}</td><td>${r[1]}</td></tr>`).join('')}</table>
+    <p style="color:var(--sub);font-size:12px">來源：${p.src}</p>`;
+  $('#card').style.display = 'block'; $('#card').scrollTop = 0;
+  if (doFly) flyTo(p.focus[0], p.focus[1], p.cat === '平面穿越' ? 90 : 170, .62, -.5);
   renderList();
 }
 $('#cardX').onclick = () => select(null);
@@ -410,7 +416,7 @@ for (const [k, name, col] of LAYERS) {
   layEl.appendChild(l);
 }
 const A = OV.assumptions;
-$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩為每 30 m 一支、避開橫交道路的推估位置。<b>橋下現況</b>只在 10 個街景抽樣點各標示前後 50 m，其餘路段未判讀。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案量體的位置與尺寸為依政策文字推估的示意，僅供討論。`;
+$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩為每 30 m 一支、避開橫交道路的推估位置。<b>橋下現況</b>只在 10 個街景抽樣點各標示前後 50 m，其餘路段未判讀。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案設施的尺寸依規範數值試排（各說明卡列出依據，標示「未對照條文原文」者須再查證），位置仍是依政策文字推估，不是官方設計，也不能取代交通影響評估與專業簽證。`;
 
 // 量測
 let measuring = false, mpts = []; const MG = new THREE.Group(); scene.add(MG);
@@ -437,7 +443,7 @@ renderer.domElement.addEventListener('pointerup', e => {
     return;
   }
   if (!showProp) return;
-  const hit = ray.intersectObjects(Object.values(pmesh), false)[0];
+  const hit = ray.intersectObjects(pickList, false)[0];
   if (hit) select(hit.object.userData.pid, false);
 });
 
