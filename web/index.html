@@ -19,6 +19,7 @@
   .lbl.road { background: #2b3440d0; color: #ffe27a; border: none; font-size: 10px; }
   .lbl.prop { background: var(--accent); color: #fff; border: none; font-weight: 600; font-size: 11.5px; }
   .lbl.zone { background: #b3261e; color: #fff; border: none; font-size: 14px; font-weight: 700; padding: 3px 9px; }
+  .lbl.under { background: #3a4656; color: #fff; border: none; }
   .lbl.meas { background: #111; color: #fff; border: none; font-size: 13px; font-weight: 600; }
   #panel { position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 340px; background: var(--panel);
     border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column;
@@ -198,11 +199,16 @@ const LAYERS = [
   ['bld', '建物', 0xdedbd4], ['key', '地標建物', 0xe8a064], ['viaduct', '高架橋', 0x8c93a0],
   ['road', '平面道路', 0x474b52], ['walk', '人行道・步道', 0xb8a98c], ['cross', '行人穿越道', 0xf2c200],
   ['green', '公園綠地', 0x74b35f], ['misc', '停車・工地・樹', 0x8f96a3], ['label', '地名標註', 0xffffff],
-  ['gap', '最大穿越間距', 0xd0021b],
+  ['under', '橋下現況（街景判讀）', 0x6f7f95], ['gap', '最大穿越間距', 0xd0021b],
 ];
 const G = Object.fromEntries(LAYERS.map(l => [l[0], new THREE.Group()]));
 Object.values(G).forEach(g => scene.add(g));
+function label(text, x, y, z, cls) {
+  const el = document.createElement('div'); el.className = 'lbl ' + cls; el.textContent = text;
+  const o = new CSS2DObject(el); o.position.copy(V(x, y, z)); return o;
+}
 const add = (key, mesh) => { if (mesh) G[key].add(mesh); return mesh; };
+const GD = OV.girder || 2.3;
 const AREA = { park: [0x7dbb68, .06, 'green'], grass: [0x93c97c, .08, 'green'], playground: [0xf0a85a, .12, 'green'], pitch: [0x4f9d8f, .1, 'green'],
   water: [0x6aa6dc, .1, 'green'], plaza: [0xcfc6b2, .07, 'green'], parking: [0x8f96a3, .07, 'misc'], construction: [0xb9a27c, .04, 'misc'],
   site: [0xcdb6c8, .02, 'green'], school: [0xd9cf9f, .03, 'green'] };
@@ -230,22 +236,50 @@ for (const Z of SC.zones) {
     (civ.some(q => Math.hypot(q[0] - m[0], q[1] - m[1]) < 14) ? c2 : c1).ribbon(r.p, 3, .28);
   }
   add('cross', c1.mesh(0xf2c200)); add('cross', c2.mesh(0xe5341f));
-  const dk = new Buf(), pr = new Buf();
+  // 高架橋體：橋面板＋箱型梁＋護欄＋隔音牆＋橋墩帽梁（斷面與高度依街景照片估計）
+  const dk = new Buf(), gd = new Buf(), pr = new Buf(), pp = new Buf(), nw = new Buf();
   for (const r of d.viaduct) {
-    dk.ribbon(r.p, r.w, 0, 1.8);
-    let acc = 17;
+    const W = r.W || r.w, main = r.c && r.t;
+    dk.ribbon(r.p, W, 0, .35);
+    gd.ribbon(r.p.map(q => [q[0], q[1], q[2] - .35]), W * .55, 0, GD - .35);
+    if (main) continue;
+    let acc = 14;                                   // 匝道與其他高架：簡化單柱
     for (let i = 1; i < r.p.length; i++) {
       const a = r.p[i - 1], b = r.p[i], seg = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
       while (acc < seg) {
         const t = acc / seg, z = a[2] + (b[2] - a[2]) * t;
-        if (z > 4) pr.box(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 2, Math.min(r.w * .45, 3.5), 0, z - 1.8, Math.atan2(b[1] - a[1], b[0] - a[0]));
-        acc += 35;
+        if (z > 4.5) pr.box(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 1.6, Math.min(W * .4, 3), 0, z - GD, Math.atan2(b[1] - a[1], b[0] - a[0]));
+        acc += 30;
       }
       acc -= seg;
     }
   }
+  for (const l of d.det.outer) { pp.ribbon(l, .4, 1.0, 1.0); nw.ribbon(l, .15, 3.2, 2.2); }
+  for (const l of d.det.inner) pp.ribbon(l, .4, .9, .9);
+  for (const q of d.det.piers) {
+    const [x, y] = q.p, capD = 1.8;
+    if (q.hi) pr.box(x, y, 2.4, 3.2, 0, q.top - capD, q.a);
+    else { const ring = []; for (let i = 0; i < 14; i++) ring.push([x + Math.cos(i / 14 * 6.2832) * 1.35, y + Math.sin(i / 14 * 6.2832) * 1.35]); pr.prism(ring, 0, q.top - capD); }
+    pr.box(x, y, 2.8, q.cap, q.top - capD, q.top, q.a);
+  }
   for (const r of d.rail_elevated || []) dk.ribbon(r.p.map(p => [p[0], p[1], 12]), 4.5, 0, 1.5);
-  add('viaduct', dk.mesh(0x9aa1ad, { transparent: true, opacity: .93 })); add('viaduct', pr.mesh(0x777c85));
+  add('viaduct', dk.mesh(0xa3a9b3)); add('viaduct', gd.mesh(0x8d939d)); add('viaduct', pr.mesh(0x7b8088));
+  add('viaduct', pp.mesh(0xb9bdc4)); add('viaduct', nw.mesh(0x9fc7b4, { transparent: true, opacity: .55 }));
+  // 橋下中央分隔帶現況（街景抽樣判讀）
+  const UC = { parking: 0x6f7f95, green: 0x4f9a4a, uturn: 0x4f9a4a, open: 0xd9cfb8, ug: 0x9b6bd0 };
+  for (const m of d.det.median) {
+    const mb = new Buf(), ex = new Buf(), n = m.pts.length;
+    mb.ribbon(m.pts, m.w, .32, .1);
+    const at = i => { const q = m.pts[i], r = m.pts[Math.min(i + 1, n - 1)], o = m.pts[Math.max(i - 1, 0)]; return [q[0], q[1], Math.atan2(r[1] - o[1], r[0] - o[0])]; };
+    if (m.t === 'parking') for (let i = 0; i < n; i++) for (const s of [-1, 1]) {
+      const [x, y, a] = at(i), off = s * m.w * .25;
+      for (const k of [-3.2, 0, 3.2]) ex.box(x + Math.cos(a) * k - Math.sin(a) * off, y + Math.sin(a) * k + Math.cos(a) * off, 1.9, 4.4, .4, 1.9, a);
+    }
+    if (m.t === 'green' || m.t === 'uturn') ex.ribbon(m.pts, m.w * .7, 1.3, .9);
+    if (m.t === 'ug') for (const i of [Math.floor(n * .3), Math.floor(n * .7)]) { const [x, y, a] = at(i); ex.box(x, y, 9, Math.min(m.w * .6, 5), .4, 3.4, a); }
+    add('under', mb.mesh(UC[m.t])); add('under', ex.mesh(m.t === 'parking' ? 0xc9ced6 : m.t === 'ug' ? 0x7d4fb8 : 0x3d7f3a));
+    const c = m.pts[n >> 1]; G.under.add(label(m.label, c[0], c[1], 5, 'under'));
+  }
   const fb = new Buf(); for (const r of d.footbridge || []) fb.ribbon(r.p, Math.max(r.w, 3), 0, .6);
   add('viaduct', fb.mesh(0x2a8fe0));
   const tb = new Buf(); for (const [x, y] of d.trees) { tb.box(x, y, .5, .5, 0, 3); tb.box(x, y, 4, 4, 3, 8); }
@@ -255,10 +289,6 @@ for (const Z of SC.zones) {
 }
 
 // ---------- 標註 ----------
-function label(text, x, y, z, cls) {
-  const el = document.createElement('div'); el.className = 'lbl ' + cls; el.textContent = text;
-  const o = new CSS2DObject(el); o.position.copy(V(x, y, z)); return o;
-}
 const placeLabels = [];
 for (const l of OV.labels) { const o = label(l.t, l.p[0], l.p[1], l.p[2], l.k); o.userData.k = l.k; G.label.add(o); placeLabels.push(o); }
 for (const Z of OV.zones) G.label.add(label(Z.name.split('_')[1] + '示範區', (Z.x0 + Z.x1) / 2, Z.y1 + 30, 20, 'zone'));
@@ -369,7 +399,7 @@ function select(id, doFly) {
 }
 $('#cardX').onclick = () => select(null);
 let showProp = true;
-function setMode(v) { showProp = v; PG.visible = v; $('#mProp').classList.toggle('on', v); $('#mNow').classList.toggle('on', !v); if (!v) select(null); }
+function setMode(v) { showProp = v; PG.visible = v; PG.traverse(o => { if (o.isCSS2DObject) o.visible = v; }); $('#mProp').classList.toggle('on', v); $('#mNow').classList.toggle('on', !v); if (!v) select(null); }
 $('#mNow').onclick = () => setMode(false); $('#mProp').onclick = () => setMode(true);
 
 const layEl = $('#layers');
@@ -380,7 +410,7 @@ for (const [k, name, col] of LAYERS) {
   layEl.appendChild(l);
 }
 const A = OV.assumptions;
-$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。以下為<b>假設值</b>：高架橋面高度（一般段 ${A.DECK_H[1]} m、跨越其他高架處 ${A.DECK_H[2]} m）、橋墩位置（每 35 m 示意）、無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色）、道路寬度由車道數估算。橋下既有設施與地下鐵路、捷運隧道未建模。提案量體的位置與尺寸為本模型依政策文字推估，僅供討論。`;
+$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩為每 30 m 一支、避開橫交道路的推估位置。<b>橋下現況</b>只在 10 個街景抽樣點各標示前後 50 m，其餘路段未判讀。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案量體的位置與尺寸為依政策文字推估的示意，僅供討論。`;
 
 // 量測
 let measuring = false, mpts = []; const MG = new THREE.Group(); scene.add(MG);
@@ -420,7 +450,7 @@ addEventListener('resize', resize); resize();
 camera.position.copy(V(30, -2200, 1900)); controls.target.copy(V(30, 20, 0));
 setZone('all');
 $('#load').remove();
-window.__app = { camera, controls, select, setZone, setMode, OV };
+window.__app = { camera, controls, select, setZone, setMode, OV, view(p, t) { fly = null; camera.position.copy(V(...p)); controls.target.copy(V(...t)); controls.update(); } };
 
 (function loop() {
   requestAnimationFrame(loop);

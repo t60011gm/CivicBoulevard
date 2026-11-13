@@ -27,7 +27,7 @@ YS, YN = (LAT_S - LAT0) * KY, (LAT_N - LAT0) * KY
 # 假設值（OSM 無實測資料者）
 LEVEL_H = 3.3          # 每層樓高
 DEFAULT_LEVELS = 4     # 無樓層資料之建物
-DECK_H = {1: 9.0, 2: 17.0, 3: 24.0}   # 高架橋面高度（依 OSM layer）
+DECK_H = {1: 10.5, 2: 15.5, 3: 22.0}   # 高架橋面高度（依 OSM layer；數值由街景照片比對鄰房樓層估計，誤差約 ±1.5 m）
 FOOTBRIDGE_H = 5.5
 RAMP_GRADE = 0.06
 
