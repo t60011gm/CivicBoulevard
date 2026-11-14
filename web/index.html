@@ -694,8 +694,8 @@ function fleet(group, geo, color, list) {           // list: [{path, s, v, loop,
           scooters.push({ path: { ...path }, s, v: 9 * (.85 + Math.random() * .35), loop: 0, y: 0, off: off + (Math.random() - .5) * .6, c: pick([0x2b2b2b, 0xd9d9d9, 0x6b6f76, 0xe0b000]) });
   }
   const addPeds = (arr, f, n) => { const path = mkPath(f.pts); if (path.len < 2) return;
-    const k = n ?? Math.max(2, Math.round(path.len / 28));
-    for (let i = 0; i < k; i++) arr.push({ path: { ...path }, s: Math.random() * path.len, v: (Math.random() < .5 ? 1 : -1) * (1.1 + Math.random() * .4), loop: 1, y: 0 }); };
+    const k = Math.max(2, Math.round((n ?? path.len / 28) * (1.8 + Math.random() * 1.6)));   // 人數隨機放大 1.8–3.4 倍
+    for (let i = 0; i < k; i++) arr.push({ path: { ...path }, s: Math.random() * path.len, v: (Math.random() < .5 ? 1 : -1) * (.8 + Math.random() * .8), loop: 1, y: 0, off: (Math.random() - .5) * .8 }); };
   for (const f of FL.ped_now) addPeds(pedsNow, f, f.n);
   for (const f of FL.ped_prop) addPeds(f.bad ? pedsBad : pedsOk, f, f.n);
   fleet(FG, car, 0xf4f4f4, cars); fleet(FG, bus, 0xe8eef2, buses); fleet(FG, truck, 0xf2f2f2, trucks); fleet(FG, scooter, 0x2b2b2b, scooters); fleet(FG, man, 0x1565c0, pedsNow);
