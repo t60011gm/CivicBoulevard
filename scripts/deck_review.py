@@ -2,7 +2,7 @@
 核對方式：把簡報各頁的模擬圖，與同頁「現況」小圖、街景判讀及模型量測逐一比對。
 頁碼以使用者提供的 34 頁 PDF 為準。level：0 = 與現況明顯不符或放不下；1 = 部分不符或存疑；2 = 未見明顯不符。
 本檔不含任何簡報圖片，只記錄文字比對結果。"""
-import json, os
+import json, math, os
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INSET = '同頁附有現況照片，可直接逐項對位'
@@ -40,7 +40,37 @@ ITEMS = [
     (33, 'C 市民敦化', '漫步平台（街角）', [1400, -60], 2, '路側的高架步道與跨街鋼構陸橋。',
      '未見明顯不符。', NOINSET),
 ]
-out = [{'page': p, 'zone': z, 'title': t, 'at': at, 'level': lv, 'shows': shows, 'finding': finding, 'basis': basis}
-       for p, z, t, at, lv, shows, finding, basis in ITEMS]
+# 各張模擬圖的推估拍攝位置：(相機 x, y, 高度), (注視點 x, y, 高度), 視角（度）, 位置把握度
+# 有現況照片的幾張依照片中的橋墩、建物與車道方位推定；其餘依畫面內容推估
+CAMS = {
+    15: ((-1000, 55, 60), (-1000, 175, 4), 50, '推估'),
+    16: ((-1160, 150, 1.6), (-1085, 152, 5), 55, '推估'),
+    17: ((-1425, 268, 1.6), (-1340, 286, 6), 62, '依現況照片推定'),
+    18: ((-985, 150, 1.5), (-1040, 172, 6), 62, '推估'),
+    21: ((-175, 70, 45), (-250, -22, 4), 50, '推估'),
+    22: ((265, -22, 1.4), (188, -36, 5), 58, '依現況照片推定'),
+    23: ((190, -82, 1.5), (190, -40, 5), 62, '推估'),
+    24: ((-240, 82, 1.4), (-240, 20, 4), 62, '依現況照片推定，方位未確認'),
+    25: ((-115, -30, 1.6), (-180, -28, 4), 62, '推估'),
+    28: ((1305, -150, 52), (1240, -45, 4), 50, '推估'),
+    29: ((690, -12, 1.1), (775, 10, 6), 62, '依現況照片推定'),
+    30: ((1385, -82, 2.5), (1300, -62, 4), 66, '依街景截圖推定'),
+    31: ((1215, -42, 5.2), (1275, -48, 5.5), 66, '推估'),
+    32: ((1040, -32, 1.2), (1085, -22, 3), 62, '位置未能定位，僅供示意'),
+    33: ((1385, -78, 6), (1432, -60, 5.5), 62, '推估'),
+}
+PAIRED = {17: 'now13', 22: 'now22', 24: 'now24', 29: 'now29', 30: 'now30', 32: 'now32'}
+LAT0, LON0 = 25.0450, 121.5390
+KX = math.radians(1) * 6378137.0 * math.cos(math.radians(LAT0))
+KY = math.radians(1) * 6367449.0
+out = []
+for p, z, t, at, lv, shows, finding, basis in ITEMS:
+    cp, ct, fov, conf = CAMS[p]
+    heading = (math.degrees(math.atan2(ct[0] - cp[0], ct[1] - cp[1])) + 360) % 360
+    out.append({'page': p, 'zone': z, 'title': t, 'at': at, 'level': lv, 'shows': shows, 'finding': finding, 'basis': basis,
+                'cam': {'p': list(cp), 't': list(ct), 'fov': fov, 'conf': conf},
+                'sv': {'lat': round(LAT0 + cp[1] / KY, 6), 'lon': round(LON0 + cp[0] / KX, 6), 'heading': round(heading)},
+                'sim': 'sim%d.jpg' % p, 'now': (PAIRED[p] + '.jpg') if p in PAIRED else None,
+                'nowPage': 13 if p == 17 else (p if p in PAIRED else None)})
 json.dump({'items': out, 'pages': 34}, open(os.path.join(BASE, 'web/data/deck.json'), 'w'), ensure_ascii=False, indent=1)
 print(len(out), 'items', {lv: sum(1 for o in out if o['level'] == lv) for lv in (0, 1, 2)})

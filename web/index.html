@@ -76,6 +76,11 @@
   .crit { margin: 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.55; }
   .crit li { padding: 5px 0; border-bottom: 1px solid var(--line); }
   .crit b { display: block; color: var(--sub); font-size: 11.5px; }
+  img.cmp { width: 100%; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
+  a.sv { font-size: 13px; font-weight: 600; color: #0b65c2; }
+  #lb { position: fixed; inset: 0; background: #000c; z-index: 20; display: grid; place-items: center; cursor: zoom-out; padding: 16px; }
+  #lb[hidden] { display: none; }
+  #lb img { max-width: 100%; max-height: 100%; border-radius: 8px; }
   .foot { font-size: 11.5px; color: var(--sub); line-height: 1.6; background: var(--chip); border-radius: 8px; padding: 8px 10px; }
   #hint { position: fixed; left: 364px; bottom: 14px; font-size: 12px; color: var(--sub); background: #ffffffcc;
     padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); }
@@ -120,9 +125,9 @@
     <div id="feasLegend" class="legend"></div>
     <div id="feasNote" class="foot" hidden>針對四項批評逐一量測：<b>①橋柱</b>：橋墩間距約 30 m，扣除柱寬與淨空後無柱空間最長約 22 m。<b>②不可移除設施</b>：以街景判讀的地下停車場出入口、匝道、機房、路口計算占用長度。<b>③天橋</b>：檢查階梯與電梯是否落在車道或建物範圍，並比較走陸橋與走平面的時間。<b>④空氣污染</b>：查無橋下實測資料，僅依停留時間與使用者定性分級。橋下現況每點代表前後最多 60 m，橋墩位置為等距推估，結果在邊界值附近會有出入。</div>
 
-    <h2>簡報模擬圖核對（點選可飛到該處）</h2>
+    <h2>簡報模擬圖核對（點選切到拍攝視角）</h2>
     <div class="plist" id="dlist"></div>
-    <div class="foot" style="margin-top:8px">逐頁比對簡報的概念示意圖與現況。頁碼依 34 頁版簡報；本站不含簡報圖片，只列比對結果。簡報已將這些圖標為「概念示意」。</div>
+    <div class="foot" style="margin-top:8px">點選任一張會把 3D 鏡頭切到推估的拍攝位置，並附街景連結。頁碼依 34 頁版簡報；簡報圖片只在本機版顯示，公開版不轉載。簡報已將這些圖標為「概念示意」。</div>
 
     <h2>圖層</h2>
     <div class="layers" id="layers"></div>
@@ -139,6 +144,7 @@
 </aside>
 
 <div id="card"><button class="x" id="cardX" aria-label="關閉">×</button><div id="cardBody"></div></div>
+<div id="lb" hidden><img id="lbImg" alt="放大檢視"></div>
 <div id="hint">左鍵拖曳旋轉・右鍵拖曳平移・滾輪縮放・點選提案設施看規範檢核</div>
 
 <script type="module">
@@ -375,8 +381,9 @@ for (const p of OV.proposals) {
 const zoneBtns = $('#zones');
 const VIEWS = { all: { t: [30, 20], d: 2600 } };
 for (const Z of OV.zones) VIEWS[Z.name] = { t: [(Z.x0 + Z.x1) / 2, 30], d: 1050 };
-let curZone = 'all', fly = null;
+let curZone = 'all', fly = null, inShot = false;
 function flyTo(tx, ty, dist, pitch = .72, yaw = 0) {
+  unshot();
   const tgt = V(tx, ty, 0);
   const off = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).multiplyScalar(dist);
   fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: tgt.clone().add(off), t1: tgt, k: 0 };
@@ -514,16 +521,43 @@ for (const d of DK.items) {
   DG.add(pb.mesh(FCOL[d.level]));
   const l = label('簡報 P' + d.page, d.at[0], d.at[1], 33, 'deck'); l.element.style.background = FHEX[d.level]; DG.add(l);
 }
+function shot(d) {                       // 切到模擬圖的推估拍攝位置
+  fly = null; inShot = true;
+  camera.fov = d.cam.fov; camera.updateProjectionMatrix();
+  controls.maxPolarAngle = Math.PI * .74; controls.minDistance = 1;
+  camera.position.copy(V(...d.cam.p)); controls.target.copy(V(...d.cam.t)); controls.update();
+}
+function unshot() {
+  if (!inShot) return; inShot = false;
+  camera.fov = 42; camera.updateProjectionMatrix();
+  controls.maxPolarAngle = Math.PI / 2 - .03; controls.minDistance = 40;
+}
 function selectDeck(page) {
   select(null);
   const d = DK.items.find(q => q.page === page); if (!d) return;
+  const sv = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${d.sv.lat},${d.sv.lon}&heading=${d.sv.heading}&pitch=5&fov=90`;
   $('#cardBody').innerHTML = `<h3>簡報第 ${d.page} 頁｜${d.title}</h3><span class="tag">${d.zone}</span><span class="vd" style="background:${FHEX[d.level]}">${DLV[d.level]}</span>
+    <div class="seg" style="margin:6px 0 4px"><button id="dkCam" class="on">模擬圖視角</button><button id="dkTop">俯瞰位置</button></div>
+    <p style="font-size:12px;color:var(--sub);margin:4px 0">鏡頭位置：${d.cam.conf}。3D 視角可切換「僅現況／現況＋提案」比較。</p>
+    <p style="margin:6px 0"><a class="sv" href="${sv}" target="_blank" rel="noopener">在 Google 街景開啟這個位置的現況 ↗</a></p>
+    <h4>提案模擬圖（簡報第 ${d.page} 頁）</h4><img class="cmp" data-src="private/${d.sim}" alt="簡報第 ${d.page} 頁模擬圖">
+    <h4>現況照片${d.nowPage ? `（簡報第 ${d.nowPage} 頁）` : ''}</h4>
+    ${d.now ? `<img class="cmp" data-src="private/${d.now}" alt="簡報第 ${d.nowPage} 頁現況照片">` : '<p style="font-size:12.5px;color:var(--sub)">這一頁沒有附現況照片，請用上方的街景連結對照。</p>'}
+    <p class="foot" id="noimg" hidden>簡報圖片只在本機版顯示，公開版不轉載。請對照簡報第 ${d.page} 頁${d.nowPage && d.nowPage !== d.page ? `與第 ${d.nowPage} 頁` : ''}，現況可用上方街景連結查看。</p>
     <h4>模擬圖畫了什麼</h4><p>${d.shows}</p><h4>與現況比對</h4><p>${d.finding}</p>
-    <p style="color:var(--sub);font-size:12px">比對依據：${d.basis}。寬度以柱徑為比例目測，誤差約 1 m。</p>`;
+    <p style="color:var(--sub);font-size:12px">比對依據：${d.basis}。尺寸為依參照物目測，誤差約一到兩成。</p>`;
+  for (const im of document.querySelectorAll('#cardBody img.cmp')) {
+    im.addEventListener('error', () => { im.hidden = true; if (im.previousElementSibling) im.previousElementSibling.hidden = true; $('#noimg').hidden = false; });
+    im.addEventListener('click', () => { $('#lbImg').src = im.src; $('#lb').hidden = false; });
+    im.src = im.dataset.src;
+  }
+  $('#dkCam').onclick = () => { shot(d); $('#dkCam').classList.add('on'); $('#dkTop').classList.remove('on'); };
+  $('#dkTop').onclick = () => { flyTo(d.at[0], d.at[1], 190, .62, -.5); $('#dkTop').classList.add('on'); $('#dkCam').classList.remove('on'); };
   $('#card').style.display = 'block'; $('#card').scrollTop = 0;
-  flyTo(d.at[0], d.at[1], 190, .62, -.5);
+  shot(d);
   [...$('#dlist').children].forEach(b => b.classList.toggle('on', +b.dataset.p === page));
 }
+$('#lb').onclick = () => { $('#lb').hidden = true; };
 for (const d of DK.items) {
   const b = document.createElement('button'); b.className = 'pitem'; b.dataset.p = d.page;
   b.innerHTML = `<span class="dot" style="background:${FHEX[d.level]}"></span><span>P${d.page}　${d.title}</span><small>${d.zone.split(' ')[1]}</small>`;
