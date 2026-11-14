@@ -22,7 +22,7 @@ YA, YB = M['zones'][0]['y0'], M['zones'][0]['y1']
 DECK_H = {int(k): v for k, v in M['assumptions']['DECK_H'].items()}
 GD, GRADE, STEP = 2.3, 0.035, 5.0
 COL_D = 2.7
-PIER_FORM = [(-9999, -1250, 1, 0), (-1250, -600, 0, 0), (-600, 420, 0, 9.0), (420, 650, 1, 0),
+PIER_FORM = [(-9999, -1250, 1, 9.0), (-1250, -600, 0, 0), (-600, 420, 0, 9.0), (420, 650, 1, 0),
              (650, 820, 1, 9.0), (820, 1300, 1, 0), (1300, 1480, 1, 9.0), (1480, 9999, 1, 0)]
 # 地下停車場車道口：(x, 坡道下降方向)。位置取自 OSM，方向為朝停車場中心推定
 UG_ENT = [(-1601, 1), (664, 1), (862, -1), (954, -1), (1118, 1), (1349, 1)]
@@ -298,13 +298,18 @@ def pier_form(x):
     return 1, 0
 
 
-def put_pier(x, y, ang, top, span, single_w=None):
+def put_pier(x, y, ang, top, ext, d=None):
+    """ext = 橋面底板自中心往兩側的半寬；d = 兩方向橋面中心距（單一橋面為 None）。
+    街景校正：鋼箱梁直接落在分隔島上的立柱，沒有伸出橋面的大型帽梁，
+    橫梁只連接兩柱（或單柱兩側小托架），一律收在橋面底板範圍內。"""
     if top < 4.5 or on_cross((x, y), 2.0):
         return
     rnd, gap = pier_form(x)
-    if single_w is not None:
+    if d is None or ext < 7.5:
         gap = 0
-    piers.append({'p': [R2(x), R2(y)], 'a': round(ang, 3), 'top': R2(top), 'cap': R2(max(span, gap + 5)), 'r': rnd, 'g': gap})
+    elif gap:
+        gap = max(6.0, min(d, 11.0, 2 * (ext - 2.5)))
+    piers.append({'p': [R2(x), R2(y)], 'a': round(ang, 3), 'top': R2(top), 'r': rnd, 'g': R2(gap), 'ext': R2(ext)})
 
 
 done_far = set()
@@ -319,9 +324,9 @@ for ci, ch in enumerate(MAIN):
         o, d = nearest_other(q, ci)
         if o is not None and d < (q['w'] + o['w']) / 2 + 8:
             if ci == 0 or ALLM and min(ci, [cj for oo, cj in ALLM if oo is o][0]) == ci:
-                put_pier((q['x'] + o['x']) / 2, (q['y'] + o['y']) / 2, ang, min(q['z'], o['z']) - GD, d + max(q['w'], o['w']) * .8)
+                put_pier((q['x'] + o['x']) / 2, (q['y'] + o['y']) / 2, ang, min(q['z'], o['z']) - GD, d / 2 + min(q['w'], o['w']) / 2, d)
         else:
-            put_pier(q['x'], q['y'], ang, q['z'] - GD, q['w'] * .8, single_w=q['w'])
+            put_pier(q['x'], q['y'], ang, q['z'] - GD, q['w'] / 2)
 
 # =====================================================================
 # 2. 匝道
@@ -524,34 +529,58 @@ def lane_hit(x, y, r):
     return on_cross((x, y), r - .5)
 
 
-def cols_of(q):
-    x, y = q['p']
-    return [(x - math.sin(q['a']) * o, y + math.cos(q['a']) * o) for o in ([-q['g'] / 2, q['g'] / 2] if q['g'] else [0])]
+def col_xy(q, o):
+    return q['p'][0] - math.sin(q['a']) * o, q['p'][1] + math.cos(q['a']) * o
 
 
-pier_fix = {'ok': 0, 'moved': 0, 'dropped': 0}
-kept = []
+def finish(q, d, g):
+    """定出立柱橫向位置 offs、柱斷面 cs 與橫梁範圍 cap（皆相對橋面中心，且不超出橋面底板）。"""
+    q['offs'] = [R2(d - g / 2), R2(d + g / 2)] if g else [R2(d)]
+    q['g'] = R2(g)
+    if q['r']:
+        q['cs'] = [2.2, 2.2] if g else [2.6, 2.6]
+    else:
+        q['cs'] = [2.6, 1.8] if g else [3.0, 2.4]
+    lim = q['ext'] - 1.0
+    wing = 1.3 if g else min(3.2, q['ext'] - 1.5)
+    q['cap'] = [R2(max(-lim, q['offs'][0] - wing)), R2(min(lim, q['offs'][-1] + wing))]
+
+
+pier_fix = {'ok': 0, 'moved': 0, 'narrowed': 0, 'conflict': 0}
 for q in piers:
-    if not any(lane_hit(cx, cy, 1.5) for cx, cy in cols_of(q)):
-        pier_fix['ok'] += 1
-        kept.append(q)
-        continue
-    x, y = q['p']
-    done = False
-    for k in range(1, 27):
-        for sgn in (1, -1):
-            d = sgn * k * .5
-            nx, ny = x - math.sin(q['a']) * d, y + math.cos(q['a']) * d
-            if not lane_hit(nx, ny, 1.5):
-                q['cap'] = R2(q['cap'] + 2 * abs(d))
-                q['p'], q['g'], done = [R2(nx), R2(ny)], 0, True
-                break
-        if done:
+    g0, lim = q['g'], q['ext'] - 1.4
+    cands = []
+    gs = [g0] + [g for g in (9.0, 8.0, 7.0, 6.0, 5.0) if g < g0] + ([0] if g0 else [])
+    for g in dict.fromkeys(gs):
+        for k in range(0, 30):
+            for sgn in ((1, -1) if k else (1,)):
+                d = sgn * k * .5
+                if abs(d) + g / 2 <= max(lim, g / 2):
+                    cands.append((abs(d) + (g0 - g) * .75 + (4 if g0 and not g else 0), d, g))
+    best = None
+    for cost, d, g in sorted(cands):
+        if not any(lane_hit(*col_xy(q, o), 1.3) for o in ([d - g / 2, d + g / 2] if g else [d])):
+            best = (d, g)
             break
-    pier_fix['moved' if done else 'dropped'] += 1
-    if done:
-        kept.append(q)
-piers = kept
+    if best is None:
+        # 橋面正下方全是車道：比照街景所見的偏心柱，立柱落在橋面邊緣外側的分隔島，以托架接回箱梁
+        for k in range(0, 13):
+            for sgn in (1, -1):
+                d = sgn * (q['ext'] - 1.4 + k * .5)
+                if best is None and not lane_hit(*col_xy(q, d), 1.3):
+                    best = d
+        if best is None:
+            finish(q, 0, g0)
+            q['hit'] = 1
+            pier_fix['conflict'] += 1
+        else:
+            finish(q, best, 0)
+            q['ecc'] = 1
+            q['cap'] = [R2(min(0, best - 1.3)), R2(max(0, best + 1.3))]
+            pier_fix['eccentric'] = pier_fix.get('eccentric', 0) + 1
+    else:
+        finish(q, *best)
+        pier_fix['ok' if best == (0, g0) else 'moved' if best[1] == g0 else 'narrowed'] += 1
 nb = len(boxes)
 boxes = [b for b in boxes if not (b['r'] == 'pier' and lane_hit(b['c'][0], b['c'][1], .9))]
 pier_fix['ramp_piers_dropped'] = nb - len(boxes)

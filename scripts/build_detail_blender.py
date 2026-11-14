@@ -185,13 +185,15 @@ for bx in CO['boxes']:
 pb = cb.setdefault('pier', Buf())
 for q in CO['piers']:
     x, y = q['p']
-    for o in ([-q['g'] / 2, q['g'] / 2] if q.get('g') else [0]):
+    for o in q['offs']:
         cx, cy = x - math.sin(q['a']) * o, y + math.cos(q['a']) * o
         if not q.get('r'):
-            pb.box(cx, cy, 2.4, 2.4 if q.get('g') else 3.2, 0, q['top'] - 1.8, q['a'])
+            pb.box(cx, cy, q['cs'][0], q['cs'][1], 0, q['top'], q['a'])
         else:
-            pb.prism([(cx + math.cos(i / 16 * math.tau) * 1.35, cy + math.sin(i / 16 * math.tau) * 1.35) for i in range(16)], 0, q['top'] - 1.8)
-    pb.box(x, y, 2.8, q['cap'], q['top'] - 1.8, q['top'], q['a'])
+            rr = q['cs'][0] / 2
+            pb.prism([(cx + math.cos(i / 16 * math.tau) * rr, cy + math.sin(i / 16 * math.tau) * rr) for i in range(16)], 0, q['top'])
+    cm = (q['cap'][0] + q['cap'][1]) / 2
+    pb.box(x - math.sin(q['a']) * cm, y + math.cos(q['a']) * cm, 2.2, q['cap'][1] - q['cap'][0], q['top'] - 1.5, q['top'], q['a'])
 for k, b in cb.items():
     b.make('市民大道_' + CM[k][0], 'co_' + k, cc)
 # 隱藏已被廊道取代的舊平面車道
