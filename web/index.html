@@ -125,6 +125,12 @@
     <div class="seg one" style="margin-top:6px">
       <button id="probBtn" class="on" aria-pressed="true">衝突與問題標示：開</button>
     </div>
+    <div class="seg" style="grid-template-columns: 1fr auto 1fr; margin-top:6px; align-items:center">
+      <button id="confPrev" style="padding-left:6px;padding-right:6px;white-space:nowrap">◀ 上一衝突點</button>
+      <b id="confNum" style="min-width:52px;text-align:center;font-size:13px;white-space:nowrap" aria-live="polite">– / 0</b>
+      <button id="confBtn" style="padding-left:6px;padding-right:6px;white-space:nowrap">下一衝突點 ▶</button>
+    </div>
+    <p id="confPos" class="foot" style="margin:6px 0 0"></p>
 
     <h2>示範區</h2>
     <div class="zones" id="zones"></div>
@@ -136,12 +142,10 @@
     <div class="plist" id="plist"></div>
 
     <h2>車流與人流（示意動畫）</h2>
-    <div class="seg" style="grid-template-columns: auto 1fr 1fr">
+    <div class="seg" style="grid-template-columns: auto 1fr">
       <button id="flowBtn" class="on" style="padding-left:8px;padding-right:8px;white-space:nowrap">動畫：開</button>
-      <button id="confPrev" style="padding-left:6px;padding-right:6px;white-space:nowrap">◀ 上一衝突點</button>
-      <button id="confBtn" style="padding-left:6px;padding-right:6px;white-space:nowrap">下一衝突點 ▶</button>
+      <span></span>
     </div>
-    <p id="confPos" class="foot" style="margin:6px 0 0" aria-live="polite">衝突點共 0 處：按「上一衝突點／下一衝突點」逐一檢視。</p>
     <div class="legend">
       <span><i class="sw" style="background:#f4f4f4;border:1px solid #0003"></i>車輛（小客車、貨車、公車、機車）</span>
       <span><i class="sw" style="background:#1565c0"></i>現況行人</span>
@@ -789,9 +793,9 @@ function fleet(group, geo, color, list) {           // list: [{path, s, v, loop,
   $('#probBtn').onclick = () => { confOn = !confOn; syncConf(); };
   const stepConf = d => { confOn = true; if (!showProp) setMode(true); else syncConf();
     ci = ci < 0 ? (d > 0 ? 0 : big.length - 1) : (ci + d + big.length) % big.length; const c = big[ci];
-    flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confPos').innerHTML = `<b>衝突點 ${ci + 1} / ${big.length}</b>：${c.t}`;
+    flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confNum').textContent = `${ci + 1} / ${big.length}`; $('#confPos').textContent = '目前衝突點：' + c.t;
     openConf(c._l || null); };
-  $('#confPos').textContent = `衝突點共 ${big.length} 處：按「上一衝突點／下一衝突點」逐一檢視。`;
+  $('#confNum').textContent = `– / ${big.length}`; $('#confPos').textContent = `共 ${big.length} 處衝突點，按兩側按鈕逐一檢視。`;
   $('#confBtn').onclick = () => stepConf(1);
   $('#confPrev').onclick = () => stepConf(-1);
   $('#flowBtn').onclick = () => { flowOn = !flowOn; $('#flowBtn').classList.toggle('on', flowOn); $('#flowBtn').textContent = '動畫：' + (flowOn ? '開' : '關'); FG.visible = flowOn; FPG.visible = flowOn && showProp; FPG.traverse(o => { if (o.isCSS2DObject) o.visible = flowOn && showProp; }); };
