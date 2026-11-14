@@ -29,12 +29,17 @@ def R(v):
 
 veh = [{'k': v['k'], 'w': v.get('w', 0), 'pts': v['pts'][::2] + [v['pts'][-1]]} for v in CO['vpaths']]
 ped_now = [{'pts': w[::2] + [w[-1]], 'loop': 0} for w in CO['wpaths'] if len(w) > 3]
-cross_x = sorted(x for z in OV['stats'].values() for x in z['cross_x'])
-for x in cross_x:
-    ys, yn = lanes_y(x)
-    ped_now.append({'pts': [[x, R(ys - 5.5), .35], [x, R(mid(x)), .35], [x, R(yn + 5.5), .35]], 'loop': 1, 'n': 3})
+# 既有行穿線：直接用圖資裡的行穿線線段（只取跨市民大道平面車道的），不另外畫直線
+M = json.load(open(os.path.join(BASE, 'data/model.json')))
+cross_paths = []
+for z in M['data'].values():
+    for r in z.get('crossing', []):
+        m = r['pts'][len(r['pts']) // 2]
+        if any(abs(p[0] - m[0]) < 14 and abs(p[1] - m[1]) < 14 for p in surf):
+            cross_paths.append({'pts': [[R(q[0]), R(q[1]), .35] for q in r['pts']], 'loop': 1, 'n': 2, 'x': m[0]})
+cross_x = sorted(c['x'] for c in cross_paths)
 
-ped_prop, conflicts = [], []
+ped_prop, conflicts, unreachable = [], [], set()
 ug = [(u['x'], u['x'] + u['dir'] * 45) for u in CO['ug']]
 
 
@@ -60,8 +65,10 @@ for p in OV['proposals']:
         no_cross = any('沒有跨市民大道的行穿線' in t for t in fails)
         ys, _ = lanes_y(xm)
         if no_cross:
-            ped_prop.append({'pts': [[R(xm), R(ys - 5.5), .35], [R(xm), R(mid(xm)), .5]], 'loop': 1, 'n': 4, 'bad': 1, 'pid': pid})
-            conflicts.append({'p': [R(xm), R(ys), 0], 'pid': pid, 't': '行人須直接穿越車道：25 m 內沒有行穿線'})
+            # 行人不任意穿越：只在人行道上徘徊，設施內不放行人
+            ped_prop.append({'pts': [[R(xm - 9), R(ys - 5.5), .35], [R(xm + 9), R(ys - 5.5), .35]], 'loop': 1, 'n': 4, 'bad': 1, 'pid': pid})
+            conflicts.append({'p': [R(xm), R(ys), 0], 'pid': pid, 't': '25 m 內沒有行穿線：行人到不了設施'})
+            unreachable.add(pid)
         else:
             c = min(cross_x, key=lambda v: abs(v - xm))
             ysc, _ = lanes_y(c)
@@ -82,7 +89,7 @@ for p in OV['proposals']:
             conflicts.append({'p': [R(x0 + 8), R(mid(x0 + 8)), 0], 'pid': pid, 't': '範圍跨越路口，沒有分隔帶可用'})
         if any('外溢' in t for t in fails):
             conflicts.append({'p': [R(xm - 20), R(mid(xm - 20) - 6), 0], 'pid': pid, 't': '攤位人潮外溢到車道邊'})
-        if len(pts) > 1:
+        if len(pts) > 1 and pid not in unreachable:
             ped_prop.append({'pts': pts, 'loop': 1, 'n': max(3, int((x1 - x0) / 9)), 'bad': 1 if bad else 0, 'pid': pid})
     elif cat == '人行陸橋':
         d = next(q for q in p['parts'] if q['r'] == 'deck')
@@ -103,7 +110,6 @@ for p in OV['proposals']:
             conflicts.append({'p': [R(q[0]), R(q[1]), 0], 'pid': pid, 't': '動線穿越建國高架下方大路口，需整合號誌'})
 
 # ---------- 提案的橋柱、電梯塔是否落在車道上 ----------
-M = json.load(open(os.path.join(BASE, 'data/model.json')))
 RG = {}
 for z in M['data'].values():
     for r in z['road']:
@@ -135,6 +141,70 @@ for p in OV['proposals']:
         conflicts.append({'p': [R(q['c'][0]), R(q['c'][1]), 0], 'pid': p['id'], 'small': 1,
                           't': ('電梯塔' if q['r'] == 'lift' else '橋柱') + '落在車道上'})
 print('proposal columns on lanes [hit, total]', col_report)
+
+# ---------- 行人只在行穿線穿越：把所有行人路徑落在車道上、又不在行穿線上的部分切掉 ----------
+XG = {}
+for z in M['data'].values():
+    for r in z.get('crossing', []):
+        pts = r['pts']
+        for i in range(len(pts) - 1):
+            a, b = pts[i], pts[i + 1]
+            for gx in range(int(min(a[0], b[0]) // 30) - 1, int(max(a[0], b[0]) // 30) + 2):
+                for gy in range(int(min(a[1], b[1]) // 30) - 1, int(max(a[1], b[1]) // 30) + 2):
+                    XG.setdefault((gx, gy), []).append((a, b))
+
+
+def on_crossing(x, y, tol=4.5):
+    for a, b in XG.get((int(x // 30), int(y // 30)), ()):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        L2 = dx * dx + dy * dy
+        t = 0 if L2 == 0 else max(0, min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L2))
+        if math.hypot(x - a[0] - t * dx, y - a[1] - t * dy) < tol:
+            return True
+    return False
+
+
+def legalise(f):
+    """回傳合法的子路徑清單。高於地面 2 m 的（陸橋上）不檢查。"""
+    pts, out, cur, cut = f['pts'], [], [], 0
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        n = max(1, int(math.dist(a[:2], b[:2]) // 2))
+        for k in range(n + (1 if i == len(pts) - 2 else 0)):
+            t = k / n
+            q = [R(a[0] + (b[0] - a[0]) * t), R(a[1] + (b[1] - a[1]) * t), round(a[2] + (b[2] - a[2]) * t, 2)]
+            bad = q[2] < 2 and on_lane(q[0], q[1], -0.6) and not on_crossing(q[0], q[1])
+            if bad:
+                cut += 1
+                if len(cur) > 1:
+                    out.append(cur)
+                cur = []
+            else:
+                cur.append(q)
+    if len(cur) > 1:
+        out.append(cur)
+    return [o for o in out if sum(math.dist(o[i][:2], o[i + 1][:2]) for i in range(len(o) - 1)) > 4], cut
+
+
+def clean(paths):
+    res, cuts = [], 0
+    for f in paths:
+        subs, cut = legalise(f)
+        cuts += cut
+        tot = sum(len(x) for x in subs) or 1
+        for sub in subs:
+            g = dict(f)
+            g['pts'] = sub[::3] + ([sub[-1]] if (len(sub) - 1) % 3 else [])
+            if 'n' in f:
+                g['n'] = max(1, round(f['n'] * len(sub) / tot))
+            res.append(g)
+    return res, cuts
+
+
+ped_now, c1 = clean(ped_now)
+ped_now += [{k: v for k, v in c.items() if k != 'x'} for c in cross_paths]
+ped_prop, c2 = clean(ped_prop)
+print('jaywalking samples removed: now', c1, 'proposal', c2)
 
 json.dump({'col_report': col_report, 'pier_fix': CO.get('pier_fix'), 'veh': veh, 'ped_now': ped_now, 'ped_prop': ped_prop, 'conflicts': conflicts},
           open(os.path.join(W, 'flows.json'), 'w'), ensure_ascii=False, separators=(',', ':'))

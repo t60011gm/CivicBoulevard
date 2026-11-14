@@ -679,7 +679,7 @@ function fleet(group, geo, color, list) {           // list: [{path, s, v, loop}
     FPG.add(label(`⚠ ${rep[1]} 支橋柱與電梯塔中有 ${rep[0]} 支落在車道上`, c.p[0], c.p[1], 14, 'conf'));
   }
   const big = FL.conflicts.filter(c => !c.small);
-  $('#flowNote').innerHTML = `<b>這是示意動畫，不是交通模擬</b>：沒有實際車流量與行人流量資料，車輛與行人的數量、速度是設定值，車輛也不會停等號誌或禮讓行人。<b>紅色標示的衝突</b>則來自量測檢查，共 ${big.length} 處動線衝突，另有 ${FL.conflicts.length - big.length} 支提案橋柱或電梯塔落在車道上；切到「現況＋提案」才會顯示。模型的現況橋墩原有 ${FL.pier_fix.moved} 排壓到車道，已修正到分隔帶。`;
+  $('#flowNote').innerHTML = `<b>這是示意動畫，不是交通模擬</b>：沒有實際車流量與行人流量資料，車輛與行人的數量、速度是設定值，車輛不會停等號誌或禮讓行人。行人只在既有行穿線穿越車道；到不了的設施，行人會停在人行道上，設施內不放行人。<b>紅色標示的衝突</b>則來自量測檢查，共 ${big.length} 處動線衝突，另有 ${FL.conflicts.length - big.length} 支提案橋柱或電梯塔落在車道上；切到「現況＋提案」才會顯示。模型的現況橋墩原有 ${FL.pier_fix.moved} 排壓到車道，已修正到分隔帶。`;
   let ci = -1;
   $('#confBtn').onclick = () => { if (!showProp) setMode(true); ci = (ci + 1) % big.length; const c = big[ci];
     flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confBtn').textContent = `衝突 ${ci + 1}/${big.length}：下一處`; };
