@@ -76,6 +76,7 @@
   .crit { margin: 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.55; }
   .crit li { padding: 5px 0; border-bottom: 1px solid var(--line); }
   .crit b { display: block; color: var(--sub); font-size: 11.5px; }
+  svg.dg { width: 100%; height: auto; display: block; background: #fafbfc; border: 1px solid var(--line); border-radius: 8px; }
   img.cmp { width: 100%; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
   a.sv { font-size: 13px; font-weight: 600; color: #0b65c2; }
   #lb { position: fixed; inset: 0; background: #000c; z-index: 20; display: grid; place-items: center; cursor: zoom-out; padding: 16px; }
@@ -127,7 +128,7 @@
 
     <h2>簡報模擬圖核對（點選切到拍攝視角）</h2>
     <div class="plist" id="dlist"></div>
-    <div class="foot" style="margin-top:8px">點選任一張會把 3D 鏡頭切到推估的拍攝位置，並附街景連結。頁碼依 34 頁版簡報；簡報圖片只在本機版顯示，公開版不轉載。簡報已將這些圖標為「概念示意」。</div>
+    <div class="foot" style="margin-top:8px">點選任一張會把 3D 鏡頭切到推估的拍攝位置，並附街景與官方政策頁連結；有量測的六張另附本站自繪的示意圖。頁碼依 34 頁版簡報；簡報原圖不在公開版轉載。簡報已將這些圖標為「概念示意」。</div>
 
     <h2>圖層</h2>
     <div class="layers" id="layers"></div>
@@ -532,6 +533,23 @@ function unshot() {
   camera.fov = 42; camera.updateProjectionMatrix();
   controls.maxPolarAngle = Math.PI / 2 - .03; controls.minDistance = 40;
 }
+function diagramSVG(g) {            // 依量測數字畫的剖面線圖（本站原創，不含簡報影像）
+  const W = 338, padL = 6, padR = 6, padT = 6, padB = 16;
+  const k = (W - padL - padR) / (g.x[1] - g.x[0]), Hpx = (g.y[1] - g.y[0]) * k + padT + padB;
+  const X = v => padL + (v - g.x[0]) * k, Y = v => padT + (g.y[1] - v) * k;
+  const tx = (x, y, str, a, c, fs = 10.5) => `<text x="${X(x).toFixed(1)}" y="${Y(y).toFixed(1)}" font-size="${fs}" fill="${c || '#333'}" text-anchor="${a || 'start'}" paint-order="stroke" stroke="#fff" stroke-width="3" stroke-linejoin="round">${str}</text>`;
+  let o = `<line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="#333" stroke-width="2"/>`;
+  for (const e of g.els) {
+    if (e.t === 'r') o += `<rect x="${X(e.x0)}" y="${Y(e.y1)}" width="${(e.x1 - e.x0) * k}" height="${(e.y1 - e.y0) * k}" fill="${e.c}" fill-opacity="${e.o ?? 1}" ${e.k ? `stroke="${e.k}" stroke-width="1.5" stroke-dasharray="5 3"` : ''}/>`;
+    else if (e.t === 't') o += tx(e.x, e.y, e.s, e.a, e.c);
+    else if (e.t === 'h') o += `<line x1="0" x2="${W}" y1="${Y(e.y)}" y2="${Y(e.y)}" stroke="${e.c}" stroke-width="1.5" stroke-dasharray="6 4"/>`;
+    else if (e.t === 'dh') o += `<path d="M${X(e.x0)} ${Y(e.y)}H${X(e.x1)}M${X(e.x0)} ${Y(e.y) - 5}v10M${X(e.x1)} ${Y(e.y) - 5}v10" stroke="${e.c}" stroke-width="2" fill="none"/>` + tx((e.x0 + e.x1) / 2, e.y + 5 / k, e.s, 'middle', e.c);
+    else if (e.t === 'dv') o += `<path d="M${X(e.x)} ${Y(e.y0)}V${Y(e.y1)}M${X(e.x) - 5} ${Y(e.y0)}h10M${X(e.x) - 5} ${Y(e.y1)}h10" stroke="${e.c}" stroke-width="2" fill="none"/>` + tx(e.x + 6 / k, (e.y0 + e.y1) / 2, e.s, 'start', e.c);
+    else if (e.t === 'p') { const r = e.h * .075 * k, top = Y(e.b + e.h), bot = Y(e.b);
+      o += `<circle cx="${X(e.x)}" cy="${top + r}" r="${r}" fill="${e.c}"/><path d="M${X(e.x)} ${top + 2 * r}V${bot - (bot - top) * .42}M${X(e.x) - 2.4 * r} ${top + 3.6 * r}H${X(e.x) + 2.4 * r}M${X(e.x)} ${bot - (bot - top) * .42}L${X(e.x) - 1.8 * r} ${bot}M${X(e.x)} ${bot - (bot - top) * .42}L${X(e.x) + 1.8 * r} ${bot}" stroke="${e.c}" stroke-width="${Math.max(1.6, r * .7)}" stroke-linecap="round" fill="none"/>`; }
+  }
+  return `<svg class="dg" viewBox="0 0 ${W} ${Hpx.toFixed(0)}" role="img" aria-label="${g.cap}">${o}</svg><p style="font-size:11.5px;color:var(--sub);margin:2px 0 0">${g.cap}。本站依量測數字自行繪製，尺寸為目測估計。</p>`;
+}
 function selectDeck(page) {
   select(null);
   const d = DK.items.find(q => q.page === page); if (!d) return;
@@ -540,10 +558,12 @@ function selectDeck(page) {
     <div class="seg" style="margin:6px 0 4px"><button id="dkCam" class="on">模擬圖視角</button><button id="dkTop">俯瞰位置</button></div>
     <p style="font-size:12px;color:var(--sub);margin:4px 0">鏡頭位置：${d.cam.conf}。3D 視角可切換「僅現況／現況＋提案」比較。</p>
     <p style="margin:6px 0"><a class="sv" href="${sv}" target="_blank" rel="noopener">在 Google 街景開啟這個位置的現況 ↗</a></p>
-    <h4>提案模擬圖（簡報第 ${d.page} 頁）</h4><img class="cmp" data-src="private/${d.sim}" alt="簡報第 ${d.page} 頁模擬圖">
-    <h4>現況照片${d.nowPage ? `（簡報第 ${d.nowPage} 頁）` : ''}</h4>
+    <p style="margin:6px 0"><a class="sv" href="${DK.official}" target="_blank" rel="noopener">開啟官方政策頁 ↗</a><span style="font-size:12px;color:var(--sub)">　請對照簡報第 ${d.page} 頁${d.nowPage && d.nowPage !== d.page ? `與第 ${d.nowPage} 頁` : ''}</span></p>
+    ${d.diagram ? `<h4>量測示意圖</h4>${diagramSVG(d.diagram)}` : ''}
+    <h4 class="privh">提案模擬圖（簡報第 ${d.page} 頁）</h4><img class="cmp" data-src="private/${d.sim}" alt="簡報第 ${d.page} 頁模擬圖">
+    <h4 class="privh">現況照片${d.nowPage ? `（簡報第 ${d.nowPage} 頁）` : ''}</h4>
     ${d.now ? `<img class="cmp" data-src="private/${d.now}" alt="簡報第 ${d.nowPage} 頁現況照片">` : '<p style="font-size:12.5px;color:var(--sub)">這一頁沒有附現況照片，請用上方的街景連結對照。</p>'}
-    <p class="foot" id="noimg" hidden>簡報圖片只在本機版顯示，公開版不轉載。請對照簡報第 ${d.page} 頁${d.nowPage && d.nowPage !== d.page ? `與第 ${d.nowPage} 頁` : ''}，現況可用上方街景連結查看。</p>
+    <p class="foot" id="noimg" hidden>簡報圖片只在本機版顯示，公開版不轉載。原圖請由上方官方政策頁或簡報查看，現況可用街景連結對照。</p>
     <h4>模擬圖畫了什麼</h4><p>${d.shows}</p><h4>與現況比對</h4><p>${d.finding}</p>
     <p style="color:var(--sub);font-size:12px">比對依據：${d.basis}。尺寸為依參照物目測，誤差約一到兩成。</p>`;
   for (const im of document.querySelectorAll('#cardBody img.cmp')) {
