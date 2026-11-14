@@ -24,6 +24,15 @@
   .lbl.conf { background: #d50000; color: #fff; border: 2px solid #fff; font-weight: 700; font-size: 12px; box-shadow: 0 0 0 2px #d50000; animation: confp 1s ease-in-out infinite alternate; }
   @keyframes confp { from { opacity: 1; } to { opacity: .55; } }
   @media (prefers-reduced-motion: reduce) { .lbl.conf { animation: none; } }
+  .lbl.conf { pointer-events: auto; cursor: pointer; }
+  .lbl.conf::after { content: ' ▸圖'; font-weight: 400; opacity: .9; }
+  .lbl.conf.open { animation: none; outline: 3px solid #ffd600; }
+  #cpop { position: fixed; z-index: 60; width: min(360px, calc(100vw - 24px)); background: #fff; color: #1c2430; border: 2px solid #d50000; border-radius: 10px;
+    padding: 10px 12px 10px; box-shadow: 0 8px 28px #0006; font-size: 12.5px; line-height: 1.5; }
+  #cpop[hidden] { display: none; }
+  #cpop h4 { margin: 0 26px 6px 0; font-size: 13.5px; color: #b00000; }
+  #cpop .x { position: absolute; top: 4px; right: 6px; border: none; background: none; font-size: 20px; line-height: 1; cursor: pointer; color: #555; padding: 4px 6px; }
+  #cpop .who { color: #555; margin: 0 0 6px; }
   .lbl.meas { background: #111; color: #fff; border: none; font-size: 13px; font-weight: 600; }
   #panel { position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 340px; background: var(--panel);
     border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column;
@@ -169,6 +178,7 @@
 <div id="lb" hidden><img id="lbImg" alt="放大檢視"></div>
 <div id="hint">左鍵拖曳旋轉・右鍵拖曳平移・滾輪縮放・點選提案設施看規範檢核</div>
 
+<div id="cpop" hidden role="dialog" aria-label="衝突示意圖"><button class="x" id="cpopX" aria-label="關閉">×</button><h4 id="cpopT"></h4><p class="who" id="cpopW"></p><div id="cpopD"></div></div>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js/+esm';
@@ -490,12 +500,42 @@ function select(id, doFly) {
 }
 $('#cardX').onclick = () => select(null);
 let showProp = true;
-var CFG, confOn = true;
+var CFG, confOn = true, confPick = [], cpOpen = null;
+function confLabel(l, c, title, dg) {              // 讓衝突標籤可點擊，點了在旁邊顯示示意圖
+  c._l = l; l.userData.conf = { c, title, dg };
+  l.element.title = '點一下看示意圖'; l.element.setAttribute('role', 'button'); l.element.tabIndex = 0;
+  const go = e => { e.stopPropagation(); openConf(cpOpen === l ? null : l); };
+  l.element.addEventListener('click', go);
+  l.element.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } });
+}
+function openConf(l) {
+  if (cpOpen) cpOpen.element.classList.remove('open');
+  cpOpen = l; const pop = $('#cpop');
+  if (!l) { pop.hidden = true; return; }
+  const { c, title, dg } = l.userData.conf, p = OV.proposals.find(q => q.id === c.pid);
+  l.element.classList.add('open');
+  $('#cpopT').textContent = '⚠ ' + title;
+  $('#cpopW').textContent = p ? '提案：' + p.title : '';
+  $('#cpopD').innerHTML = dg ? diagramSVG(dg) : '<p style="color:#555;margin:0">這一項沒有可量測的數字，未附示意圖。</p>';
+  pop.hidden = false; placeConf();
+}
+function placeConf() {                              // 每一格跟著標籤移動；標籤被隱藏或轉到鏡頭後方就收起
+  if (!cpOpen) return;
+  const el = cpOpen.element, pop = $('#cpop');
+  if (!CFG.visible || el.style.display === 'none') { pop.style.visibility = 'hidden'; return; }
+  pop.style.visibility = '';
+  const r = el.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+  let x = r.right + 10, y = r.top - 6;
+  if (x + w > innerWidth - 8) { x = Math.min(Math.max(8, r.left), innerWidth - w - 8); y = r.bottom + 8; }
+  if (y + h > innerHeight - 8) y = Math.max(8, r.top - h - 8);
+  pop.style.left = Math.max(8, x) + 'px'; pop.style.top = Math.max(8, y) + 'px';
+}
 function syncConf() {
   const b = $('#probBtn'); if (!b) return;
   const v = showProp && confOn;
   b.classList.toggle('on', v); b.setAttribute('aria-pressed', v); b.disabled = !showProp;
   b.textContent = showProp ? '衝突與問題標示：' + (confOn ? '開' : '關') : '衝突與問題標示（需先顯示提案）';
+  if (!v && cpOpen) openConf(null);
   if (CFG) { CFG.visible = v; CFG.traverse(o => { if (o.isCSS2DObject) o.visible = v; }); }
 }
 function setMode(v) { showProp = v; PG.visible = v; PG.traverse(o => { if (o.isCSS2DObject) o.visible = v; }); if (typeof FPG !== 'undefined') { FPG.visible = v && flowOn; FPG.traverse(o => { if (o.isCSS2DObject) o.visible = v && flowOn; }); } $('#mProp').classList.toggle('on', v); $('#mNow').classList.toggle('on', !v); if (!v) select(null); syncConf(); }
@@ -536,6 +576,8 @@ renderer.domElement.addEventListener('pointerup', e => {
     return;
   }
   if (!showProp) return;
+  if (CFG && CFG.visible) { const ch = ray.intersectObjects(confPick, false)[0];
+    if (ch) { const l = ch.object.userData.c._l; if (l) { openConf(l); return; } } }
   const hit = ray.intersectObjects(pickList, false)[0];
   if (hit) select(hit.object.userData.pid, false);
 });
@@ -589,9 +631,10 @@ function diagramSVG(g) {            // 依量測數字畫的剖面線圖（本�
   const k = (W - padL - padR) / (g.x[1] - g.x[0]), Hpx = (g.y[1] - g.y[0]) * k + padT + padB;
   const X = v => padL + (v - g.x[0]) * k, Y = v => padT + (g.y[1] - v) * k;
   const tx = (x, y, str, a, c, fs = 10.5) => `<text x="${X(x).toFixed(1)}" y="${Y(y).toFixed(1)}" font-size="${fs}" fill="${c || '#333'}" text-anchor="${a || 'start'}" paint-order="stroke" stroke="#fff" stroke-width="3" stroke-linejoin="round">${str}</text>`;
-  let o = `<line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="#333" stroke-width="2"/>`;
+  let o = g.ng ? '' : `<line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="#333" stroke-width="2"/>`;
   for (const e of g.els) {
     if (e.t === 'r') o += `<rect x="${X(e.x0)}" y="${Y(e.y1)}" width="${(e.x1 - e.x0) * k}" height="${(e.y1 - e.y0) * k}" fill="${e.c}" fill-opacity="${e.o ?? 1}" ${e.k ? `stroke="${e.k}" stroke-width="1.5" stroke-dasharray="5 3"` : ''}/>`;
+    else if (e.t === 'pl') o += `<polygon points="${e.pts.map(q => X(q[0]).toFixed(1) + ',' + Y(q[1]).toFixed(1)).join(' ')}" fill="${e.c}" fill-opacity="${e.o ?? 1}"/>`;
     else if (e.t === 't') o += tx(e.x, e.y, e.s, e.a, e.c);
     else if (e.t === 'h') o += `<line x1="0" x2="${W}" y1="${Y(e.y)}" y2="${Y(e.y)}" stroke="${e.c}" stroke-width="1.5" stroke-dasharray="6 4"/>`;
     else if (e.t === 'dh') o += `<path d="M${X(e.x0)} ${Y(e.y)}H${X(e.x1)}M${X(e.x0)} ${Y(e.y) - 5}v10M${X(e.x1)} ${Y(e.y) - 5}v10" stroke="${e.c}" stroke-width="2" fill="none"/>` + tx((e.x0 + e.x1) / 2, e.y + 5 / k, e.s, 'middle', e.c);
@@ -724,19 +767,23 @@ function fleet(group, geo, color, list) {           // list: [{path, s, v, loop,
     ring.rotation.x = -Math.PI / 2; ring.position.copy(V(c.p[0], c.p[1], .7)); ring.renderOrder = 5; CFG.add(ring); rings.push(ring);
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(c.small ? .25 : .6, c.small ? .25 : .6, h, 8), new THREE.MeshBasicMaterial({ color: 0xff1744, transparent: true, opacity: .75 }));
     beam.position.copy(V(c.p[0], c.p[1], h / 2)); CFG.add(beam);
-    if (!c.small) { const l = label('⚠ ' + c.t, c.p[0], c.p[1], h + 2, 'conf'); CFG.add(l); }
+    ring.userData.c = beam.userData.c = c; confPick.push(ring, beam);
+    if (!c.small) { const l = label('⚠ ' + c.t, c.p[0], c.p[1], h + 2, 'conf'); CFG.add(l); confLabel(l, c, c.t, c.dg); }
   }
   for (const pid in byPid) {                       // 小衝突（橋柱）每個提案只標一張總結
     const sm = byPid[pid].filter(c => c.small && !c.clash), cl = byPid[pid].filter(c => c.clash);
     if (sm.length) { const c = sm[sm.length >> 1], rep = FL.col_report[pid];
-      CFG.add(label(`⚠ ${rep[1]} 支橋柱與電梯塔中有 ${rep[0]} 支落在車道上`, c.p[0], c.p[1], 14, 'conf')); }
+      const l = label(`⚠ ${rep[1]} 支橋柱與電梯塔中有 ${rep[0]} 支落在車道上`, c.p[0], c.p[1], 14, 'conf'); CFG.add(l);
+      confLabel(l, c, `${rep[1]} 支橋柱與電梯塔中有 ${rep[0]} 支落在車道上`, FL.dg_sum?.[pid]?.col); for (const q of sm) q._l = l; }
     if (cl.length) { const c = cl[cl.length >> 1];
-      CFG.add(label(`⚠ 設施與 ${cl.length} 支現況橋柱重疊，位置須重排`, c.p[0], c.p[1], 11, 'conf')); }
+      const l = label(`⚠ 設施與 ${cl.length} 支現況橋柱重疊，位置須重排`, c.p[0], c.p[1], 11, 'conf'); CFG.add(l);
+      confLabel(l, c, `設施與 ${cl.length} 支現況橋柱重疊，位置須重排`, FL.dg_sum?.[pid]?.clash); for (const q of cl) q._l = l; }
   }
   const big = FL.conflicts.filter(c => !c.small);
-  $('#flowNote').innerHTML = `<b>這是示意動畫，不是交通模擬</b>：沒有實際車流量與行人流量資料，車輛與行人的數量、速度是設定值，車輛不會停等號誌或禮讓行人。行人只在既有行穿線穿越車道；到不了的設施，行人會停在人行道上，設施內不放行人。<b>紅色標示的衝突</b>則來自量測檢查，共 ${big.length} 處動線衝突，另有 ${FL.conflicts.filter(c => c.small && !c.clash).length} 支提案橋柱或電梯塔落在車道上、${FL.conflicts.filter(c => c.clash).length} 支現況橋柱與提案設施重疊；切到「現況＋提案」才會顯示，可用上方「衝突與問題標示」按鈕開關。現況橋墩已依街景重新校正：立柱都在橋面正下方的分隔帶內、橫梁不超出橋面；共 ${FL.pier_fix.ok + FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排，其中 ${FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排的柱位是為了避開估算的車道而橫移或縮小柱距，位置誤差較大。`;
+  $('#flowNote').innerHTML = `<b>這是示意動畫，不是交通模擬</b>：沒有實際車流量與行人流量資料，車輛與行人的數量、速度是設定值，車輛不會停等號誌或禮讓行人。行人只在既有行穿線穿越車道；到不了的設施，行人會停在人行道上，設施內不放行人。<b>紅色標示的衝突</b>則來自量測檢查，共 ${big.length} 處動線衝突，另有 ${FL.conflicts.filter(c => c.small && !c.clash).length} 支提案橋柱或電梯塔落在車道上、${FL.conflicts.filter(c => c.clash).length} 支現況橋柱與提案設施重疊；切到「現況＋提案」才會顯示，可用上方「衝突與問題標示」按鈕開關。<b>點紅色標籤或紅色圓環、光柱</b>，旁邊會出現依量測數字畫的示意圖。現況橋墩已依街景重新校正：立柱都在橋面正下方的分隔帶內、橫梁不超出橋面；共 ${FL.pier_fix.ok + FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排，其中 ${FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排的柱位是為了避開估算的車道而橫移或縮小柱距，位置誤差較大。`;
   let ci = -1;
   syncConf();
+  $('#cpopX').onclick = () => openConf(null);
   $('#probBtn').onclick = () => { confOn = !confOn; syncConf(); };
   $('#confBtn').onclick = () => { confOn = true; if (!showProp) setMode(true); else syncConf(); ci = (ci + 1) % big.length; const c = big[ci];
     flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confBtn').textContent = `衝突 ${ci + 1}/${big.length}：下一處`; };
@@ -764,7 +811,7 @@ function stepFlows() {
   const k = 1 + .25 * Math.sin(now / 220);
   for (const r of rings) r.scale.set(k, k, 1);
 }
-window.__app = { setFeas, selectDeck, FL,  camera, controls, select, setZone, setMode, OV, view(p, t) { fly = null; camera.position.copy(V(...p)); controls.target.copy(V(...t)); controls.update(); } };
+window.__app = { openConf, diagramSVG, confLabels: () => CFG.children.filter(o => o.userData.conf), setFeas, selectDeck, FL,  camera, controls, select, setZone, setMode, OV, view(p, t) { fly = null; camera.position.copy(V(...p)); controls.target.copy(V(...t)); controls.update(); } };
 
 (function loop() {
   requestAnimationFrame(loop);
@@ -778,7 +825,7 @@ window.__app = { setFeas, selectDeck, FL,  camera, controls, select, setZone, se
   const dist = camera.position.distanceTo(controls.target);
   if (G.under.visible) for (const o of underLabels) o.visible = dist < 650;
   if (G.label.visible) for (const o of placeLabels) o.visible = o.userData.k === 'road' ? dist < 900 : dist < 1900;
-  renderer.render(scene, camera); lr.render(scene, camera);
+  renderer.render(scene, camera); lr.render(scene, camera); placeConf();
 })();
 </script>
 </body>

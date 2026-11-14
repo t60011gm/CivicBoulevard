@@ -210,7 +210,8 @@ ped_now += [{k: v for k, v in c.items() if k != 'x'} for c in cross_paths]
 ped_prop, c2 = clean(ped_prop)
 print('jaywalking samples removed: now', c1, 'proposal', c2)
 
-json.dump({'col_report': col_report, 'pier_fix': CO.get('pier_fix'), 'veh': veh, 'ped_now': ped_now, 'ped_prop': ped_prop, 'conflicts': conflicts},
+exec(open(os.path.join(BASE, 'scripts/conflict_diagrams.py')).read())
+json.dump({'dg_sum': dg_sum, 'col_report': col_report, 'pier_fix': CO.get('pier_fix'), 'veh': veh, 'ped_now': ped_now, 'ped_prop': ped_prop, 'conflicts': conflicts},
           open(os.path.join(W, 'flows.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
 print('veh', len(veh), 'ped_now', len(ped_now), 'ped_prop', len(ped_prop), 'conflicts', len(conflicts))
 for c in conflicts:
