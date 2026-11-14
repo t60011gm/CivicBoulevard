@@ -141,6 +141,10 @@ for p in OV['proposals']:
         conflicts.append({'p': [R(q['c'][0]), R(q['c'][1]), 0], 'pid': p['id'], 'small': 1,
                           't': ('電梯塔' if q['r'] == 'lift' else '橋柱') + '落在車道上'})
 print('proposal columns on lanes [hit, total]', col_report)
+# 橋墩校正後複核：提案量體與現況立柱重疊（critique_check.py 計算）
+for pid, c in CQ.get('clashes', {}).items():
+    for x, y in c['pts']:
+        conflicts.append({'p': [R(x), R(y), 0], 'pid': pid, 'small': 1, 'clash': 1, 'n': c['n'], 't': '提案量體與現況橋柱重疊'})
 
 # ---------- 行人只在行穿線穿越：把所有行人路徑落在車道上、又不在行穿線上的部分切掉 ----------
 XG = {}

@@ -9,10 +9,47 @@ OV = json.load(open(os.path.join(BASE, 'web/data/overlay.json')))
 
 FIXED = {'ug': '地下停車場出入口或車道', 'ramp': '匝道引道', 'facility': '機房或管理建物', 'open': '路口（無分隔帶）'}
 MOVABLE = {'parking': '收費停車場', 'uturn': '迴轉道與綠帶', 'green': '植栽綠帶', 'paved': '鋪面小廣場'}
-PIER_KEEP = 2.7 + 2 * 2.5          # 柱徑 2.7 m 加前後各 2.5 m 淨空
+PIER_KEEP = 3.0 + 2 * 2.5          # 柱順橋向最長 3.0 m 加前後各 2.5 m 淨空
 
 medians = [(m['pts'][0][0], m['pts'][-1][0], m['t'], m['w']) for z in SC['data'].values() for m in z['det']['median']]
-piers = sorted(q['p'][0] for z in SC['data'].values() for q in z['det']['piers'])
+_px = sorted(q['p'][0] for z in SC['data'].values() for q in z['det']['piers'])
+piers = []
+for _x in _px:                      # 兩方向橋面各自落墩、x 相近的併成同一排
+    if piers and _x - piers[-1] < 6:
+        continue
+    piers.append(_x)
+# 每支實際立柱 (x, y, 半徑, 柱頂高)
+COLS = []
+for z in SC['data'].values():
+    for q in z['det']['piers']:
+        for o in q.get('offs', [0]):
+            COLS.append((q['p'][0] - math.sin(q['a']) * o, q['p'][1] + math.cos(q['a']) * o, max(q.get('cs', [2.7, 2.7])) / 2, q['top']))
+
+
+def clash(p):
+    """提案量體（高度 0.3 m 以上的實體）與現況立柱在平面上重疊、且高度有交集的處數。鋪面與標線不算。"""
+    hits = []
+    for q in p['parts']:
+        if q['k'] == 'box':
+            if q['z'][1] - q['z'][0] < 0.3:
+                continue
+            ca, sa = math.cos(q['a']), math.sin(q['a'])
+            for cx, cy, r, top in COLS:
+                dx, dy = cx - q['c'][0], cy - q['c'][1]
+                lx, ly = dx * ca + dy * sa, -dx * sa + dy * ca
+                if abs(lx) < q['s'][0] / 2 + r and abs(ly) < q['s'][1] / 2 + r and q['z'][0] < top:
+                    hits.append((round(cx, 1), round(cy, 1), q['r']))
+        elif q['t'] >= 0.3 or q['pts'][0][2] >= 2:
+            for cx, cy, r, top in COLS:
+                for i in range(len(q['pts']) - 1):
+                    a, b = q['pts'][i], q['pts'][i + 1]
+                    ux, uy = b[0] - a[0], b[1] - a[1]
+                    L2 = ux * ux + uy * uy or 1
+                    t = max(0, min(1, ((cx - a[0]) * ux + (cy - a[1]) * uy) / L2))
+                    if math.hypot(cx - a[0] - t * ux, cy - a[1] - t * uy) < q['w'] / 2 + r and min(a[2], b[2]) - q['t'] < top:
+                        hits.append((round(cx, 1), round(cy, 1), q['r']))
+                        break
+    return hits
 bld = [b for z in M['data'].values() for b in z['buildings']]
 roads = [r for z in M['data'].values() for r in z['road'] if r['hw'] not in ('service',)]
 
@@ -192,7 +229,7 @@ AIR_NOTE = '查無市民大道橋下的空氣品質實測與車流量資料，�
 by = {}
 for r in rows:
     fx = sum(r['fixed'].values())
-    c1 = '範圍內有 %d 支橋墩（間距約 30 m、柱寬約 2.7 m），橋墩之間無柱空間最長約 22 m。' % r['piers']
+    c1 = '範圍內有 %d 排橋墩（間距約 30 m、柱寬 1.8–3.0 m，柱形依街景校正），橋墩之間無柱空間最長約 22 m。' % r['piers']
     if r['mode'] == 'clear':
         c1 += '此設施需要無柱淨空 %d m（%s），扣除後最長連續 %d m。' % (r['need'], r['why'], r['longest'])
     elif r['mode'] == 'area':
@@ -235,8 +272,20 @@ for p in OV['proposals']:
     else:
         by[p['id']] = {'verdict': '不在橋下，未列入此項檢查', 'level': 3, 'c1': '不在高架橋下。', 'c2': '不在高架橋下。',
                        'c3': '不涉及人行天橋。', 'c4': '離車道較遠，未評。', 'air': 3}
+# 橋墩校正後的幾何複核：提案量體是否與現況立柱重疊
+clashes = {}
+for p in OV['proposals']:
+    h = clash(p)
+    if not h:
+        continue
+    pts = sorted(set((x, y) for x, y, _ in h))
+    kinds = sorted(set(k for _, _, k in h))
+    clashes[p['id']] = {'n': len(pts), 'pts': pts, 'kinds': kinds}
+    by[p['id']]['c1'] += '【橋墩校正後複核】提案量體與 %d 支現況橋柱在平面上重疊，位置須重排。' % len(pts)
+    by[p['id']]['clash'] = len(pts)
+print('clashes', {k: (v['n'], v['kinds']) for k, v in clashes.items()})
 cnt = {}
 for v in by.values():
     cnt[v['level']] = cnt.get(v['level'], 0) + 1
 print('levels', cnt)
-json.dump({'under': rows, 'bridges': bridges, 'by': by}, open(os.path.join(BASE, 'web/data/critique.json'), 'w'), ensure_ascii=False, indent=1)
+json.dump({'under': rows, 'bridges': bridges, 'by': by, 'clashes': clashes}, open(os.path.join(BASE, 'web/data/critique.json'), 'w'), ensure_ascii=False, indent=1)

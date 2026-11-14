@@ -712,12 +712,14 @@ function fleet(group, geo, color, list) {           // list: [{path, s, v, loop,
     if (!c.small) { const l = label('⚠ ' + c.t, c.p[0], c.p[1], h + 2, 'conf'); FPG.add(l); }
   }
   for (const pid in byPid) {                       // 小衝突（橋柱）每個提案只標一張總結
-    const sm = byPid[pid].filter(c => c.small); if (!sm.length) continue;
-    const c = sm[sm.length >> 1], rep = FL.col_report[pid];
-    FPG.add(label(`⚠ ${rep[1]} 支橋柱與電梯塔中有 ${rep[0]} 支落在車道上`, c.p[0], c.p[1], 14, 'conf'));
+    const sm = byPid[pid].filter(c => c.small && !c.clash), cl = byPid[pid].filter(c => c.clash);
+    if (sm.length) { const c = sm[sm.length >> 1], rep = FL.col_report[pid];
+      FPG.add(label(`⚠ ${rep[1]} 支橋柱與電梯塔中有 ${rep[0]} 支落在車道上`, c.p[0], c.p[1], 14, 'conf')); }
+    if (cl.length) { const c = cl[cl.length >> 1];
+      FPG.add(label(`⚠ 設施與 ${cl.length} 支現況橋柱重疊，位置須重排`, c.p[0], c.p[1], 11, 'conf')); }
   }
   const big = FL.conflicts.filter(c => !c.small);
-  $('#flowNote').innerHTML = `<b>這是示意動畫，不是交通模擬</b>：沒有實際車流量與行人流量資料，車輛與行人的數量、速度是設定值，車輛不會停等號誌或禮讓行人。行人只在既有行穿線穿越車道；到不了的設施，行人會停在人行道上，設施內不放行人。<b>紅色標示的衝突</b>則來自量測檢查，共 ${big.length} 處動線衝突，另有 ${FL.conflicts.length - big.length} 支提案橋柱或電梯塔落在車道上；切到「現況＋提案」才會顯示。現況橋墩已依街景重新校正：立柱都在橋面正下方的分隔帶內、橫梁不超出橋面；共 ${FL.pier_fix.ok + FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排，其中 ${FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排的柱位是為了避開估算的車道而橫移或縮小柱距，位置誤差較大。`;
+  $('#flowNote').innerHTML = `<b>這是示意動畫，不是交通模擬</b>：沒有實際車流量與行人流量資料，車輛與行人的數量、速度是設定值，車輛不會停等號誌或禮讓行人。行人只在既有行穿線穿越車道；到不了的設施，行人會停在人行道上，設施內不放行人。<b>紅色標示的衝突</b>則來自量測檢查，共 ${big.length} 處動線衝突，另有 ${FL.conflicts.filter(c => c.small && !c.clash).length} 支提案橋柱或電梯塔落在車道上、${FL.conflicts.filter(c => c.clash).length} 支現況橋柱與提案設施重疊；切到「現況＋提案」才會顯示。現況橋墩已依街景重新校正：立柱都在橋面正下方的分隔帶內、橫梁不超出橋面；共 ${FL.pier_fix.ok + FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排，其中 ${FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排的柱位是為了避開估算的車道而橫移或縮小柱距，位置誤差較大。`;
   let ci = -1;
   $('#confBtn').onclick = () => { if (!showProp) setMode(true); ci = (ci + 1) % big.length; const c = big[ci];
     flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confBtn').textContent = `衝突 ${ci + 1}/${big.length}：下一處`; };

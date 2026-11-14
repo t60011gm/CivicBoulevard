@@ -60,7 +60,18 @@ def strip(x0, x1, t, w, top, thick, role, step=5.0):
 
 
 ALL_CROSS = sorted(x for z in stats.values() for x in z['cross_x'])
-ALL_PIERS = sorted(q['p'][0] for z in DET.values() for q in z['piers'])
+def _rows(xs, tol=6.0):
+    """兩方向橋面各自落墩時，x 相近的併成同一排"""
+    out = []
+    for x in sorted(xs):
+        if out and x - out[-1][-1] < tol:
+            out[-1].append(x)
+        else:
+            out.append([x])
+    return [sum(g) / len(g) for g in out]
+
+
+ALL_PIERS = _rows(q['p'][0] for z in DET.values() for q in z['piers'])
 
 
 def usable(x):
@@ -132,8 +143,8 @@ def under_site(pid, zone, title, x0, x1, desc, build, src=None):
         checks.append([1, '分隔帶推估寬 %.1f m，扣除兩側各 %.1f m 側向淨距（本模型取值，規範無對應條文）與圍籬後，可用寬 %.1f m' % (U + 2 * SIDE + 2 * FENCE_T, SIDE, U)])
     forms = [pier_form(x0 + (x1 - x0) * k / 4) for k in range(5)]
     tw = [f for f in forms if f[1]]
-    if tw:
-        gap = tw[0][1]
+    if len(tw) * 2 > len(forms):                            # 取樣 5 點中過半是兩支柱才算，柱距取中位數
+        gap = sorted(f[1] for f in tw)[len(tw) // 2]
         full = U + 2 * SIDE + 2 * FENCE_T
         inner = gap - COL_D - 1.0                           # 兩柱之間，扣柱徑與兩側各 0.5 m
         outer = (full - gap - COL_D) / 2 - SIDE - FENCE_T   # 柱外側到車道
@@ -143,7 +154,7 @@ def under_site(pid, zone, title, x0, x1, desc, build, src=None):
         U = max(U2, 1.0)
     sl, npier = slots(x0, x1)
     if npier:
-        checks.append([1, '範圍內有 %d 排橋墩（推估位置），設施已避開橋墩前後各 2.5 m' % npier])
+        checks.append([1, '範圍內有 %d 排橋墩（街景校正柱形、每 30 m 一排的推估位置），設施已避開橋墩前後各 2.5 m' % npier])
     specs, summary = build(x0, x1, U, sl, parts, checks)
     access_check(x0, x1, checks)
     kw = {'src': src} if src else {}

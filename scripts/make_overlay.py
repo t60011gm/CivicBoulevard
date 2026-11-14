@@ -234,9 +234,48 @@ for Z in M['zones']:
         det['median'].append({'t': typ, 'w': round(mw, 1), 'pts': line_along(a, b, 0.0, 10.0), 'x': ox,
                               'label': '街景判讀：' + OBS_T[typ][0] + ('（' + extra + '）' if extra else '')})
     DET[zn] = det
-    print(zn, 'piers', len(det['piers']), 'median obs', len(det['median']))
 
-# ---------- 現況（精簡欄位） ----------
+# ---- 橋墩改用 corridor.py 依街景校正後的實際立柱（取代上面每 30 m 一排的舊推估） ----
+_corp = os.path.join(OUT, 'corridor.json')
+COLS = []                                       # 每支立柱：(x, y, 橫向寬, r)
+if os.path.exists(_corp):
+    _piers = json.load(open(_corp))['piers']
+    for Z in M['zones']:
+        DET[Z['name']]['piers'] = []
+    for q in _piers:
+        for Z in M['zones']:
+            if Z['x0'] <= q['p'][0] < Z['x1']:
+                DET[Z['name']]['piers'].append({k: q[k] for k in ('p', 'a', 'top', 'r', 'g', 'offs', 'cs', 'cap')})
+        for o in q['offs']:
+            COLS.append((q['p'][0] - math.sin(q['a']) * o, q['p'][1] + math.cos(q['a']) * o, q['cs'][1] if not q['r'] else q['cs'][0], q['r']))
+    _old_form = pier_form
+
+    # 同一排 = 同一座橋墩的立柱，加上另一方向橋面在 x 前後 8 m 內的立柱
+    ROWS = []
+    for c in sorted(COLS):
+        if ROWS and c[0] - ROWS[-1][0][0] < 8:
+            ROWS[-1].append(c)
+        else:
+            ROWS.append([c])
+
+    def pier_form(x):
+        """以 x 前後 18 m 內的實際橋墩排判斷：同一排內立柱橫向相距 4 m 以上才算左右兩支柱。
+        回傳 (是否圓柱, 兩柱中心距, 說明)。"""
+        global COL_D
+        near = [r for r in ROWS if abs(r[0][0] - x) <= 18]
+        if not near:
+            return 1, 0, ''
+        COL_D = max(c[2] for r in near for c in r)
+        sp = []
+        for r in near:
+            lat = [c[1] - civic_y(c[0]) for c in r]
+            sp.append(max(lat) - min(lat))
+        tw = sorted(v for v in sp if v >= 4)
+        why = _old_form(x)[2] or '街景判讀'
+        if len(tw) * 2 < len(sp):
+            return near[0][0][3], 0, why
+        return near[0][0][3], round(tw[len(tw) // 2], 1), why
+
 # 已由 corridor.py 重建的路段（市民大道主線、相連匝道、平面車道）在此標記 x=1，網站與 Blender 不再重複繪製
 _cor = json.load(open(os.path.join(OUT, 'corridor.json'))) if os.path.exists(os.path.join(OUT, 'corridor.json')) else {'centers': []}
 _cg = {}
