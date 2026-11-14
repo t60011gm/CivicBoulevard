@@ -20,6 +20,7 @@
   .lbl.prop { background: var(--accent); color: #fff; border: none; font-weight: 600; font-size: 11.5px; }
   .lbl.zone { background: #b3261e; color: #fff; border: none; font-size: 14px; font-weight: 700; padding: 3px 9px; }
   .lbl.under { background: #3a4656; color: #fff; border: none; }
+  .lbl.deck { color: #fff; border: none; font-weight: 700; cursor: default; }
   .lbl.meas { background: #111; color: #fff; border: none; font-size: 13px; font-weight: 600; }
   #panel { position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 340px; background: var(--panel);
     border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column;
@@ -119,6 +120,10 @@
     <div id="feasLegend" class="legend"></div>
     <div id="feasNote" class="foot" hidden>針對四項批評逐一量測：<b>①橋柱</b>：橋墩間距約 30 m，扣除柱寬與淨空後無柱空間最長約 22 m。<b>②不可移除設施</b>：以街景判讀的地下停車場出入口、匝道、機房、路口計算占用長度。<b>③天橋</b>：檢查階梯與電梯是否落在車道或建物範圍，並比較走陸橋與走平面的時間。<b>④空氣污染</b>：查無橋下實測資料，僅依停留時間與使用者定性分級。橋下現況每點代表前後最多 60 m，橋墩位置為等距推估，結果在邊界值附近會有出入。</div>
 
+    <h2>簡報模擬圖核對（點選可飛到該處）</h2>
+    <div class="plist" id="dlist"></div>
+    <div class="foot" style="margin-top:8px">逐頁比對簡報的概念示意圖與現況。頁碼依 34 頁版簡報；本站不含簡報圖片，只列比對結果。簡報已將這些圖標為「概念示意」。</div>
+
     <h2>圖層</h2>
     <div class="layers" id="layers"></div>
 
@@ -142,7 +147,7 @@ import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/exampl
 import { CSS2DRenderer, CSS2DObject } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js/+esm';
 
 const $ = s => document.querySelector(s);
-const [SC, OV, CQ] = await Promise.all(['scene', 'overlay', 'critique'].map(f => fetch('data/' + f + '.json').then(r => r.json())));
+const [SC, OV, CQ, DK] = await Promise.all(['scene', 'overlay', 'critique', 'deck'].map(f => fetch('data/' + f + '.json').then(r => r.json())));
 const CR = CQ.by, FCOL = [0xd32f2f, 0xf59e0b, 0x2e9e5b, 0x9aa3ad], FHEX = ['#d32f2f', '#f59e0b', '#2e9e5b', '#9aa3ad'];
 const worst = p => p.id.startsWith('c5_') ? CR['c5_0'] : CR[p.id];
 
@@ -230,7 +235,7 @@ const LAYERS = [
   ['bld', '建物', 0xdedbd4], ['key', '地標建物', 0xe8a064], ['viaduct', '高架橋', 0x8c93a0],
   ['road', '平面道路', 0x474b52], ['walk', '人行道・步道', 0xb8a98c], ['cross', '行人穿越道', 0xf2c200],
   ['green', '公園綠地', 0x74b35f], ['misc', '停車・工地・樹', 0x8f96a3], ['label', '地名標註', 0xffffff],
-  ['under', '橋下現況（街景判讀）', 0x6f7f95], ['gap', '最大穿越間距', 0xd0021b],
+  ['under', '橋下現況（街景判讀）', 0x6f7f95], ['deckpin', '簡報核對點', 0xd32f2f], ['gap', '最大穿越間距', 0xd0021b],
 ];
 const G = Object.fromEntries(LAYERS.map(l => [l[0], new THREE.Group()]));
 Object.values(G).forEach(g => scene.add(g));
@@ -289,9 +294,12 @@ for (const Z of SC.zones) {
   for (const l of d.det.outer) { pp.ribbon(l, .4, 1.0, 1.0); nw.ribbon(l, .15, 3.2, 2.2); }
   for (const l of d.det.inner) pp.ribbon(l, .4, .9, .9);
   for (const q of d.det.piers) {
-    const [x, y] = q.p, capD = 1.8;
-    if (q.hi) pr.box(x, y, 2.4, 3.2, 0, q.top - capD, q.a);
-    else { const ring = []; for (let i = 0; i < 14; i++) ring.push([x + Math.cos(i / 14 * 6.2832) * 1.35, y + Math.sin(i / 14 * 6.2832) * 1.35]); pr.prism(ring, 0, q.top - capD); }
+    const [x, y] = q.p, capD = 1.8, offs = q.g ? [-q.g / 2, q.g / 2] : [0];
+    for (const o of offs) {                                   // 雙柱：沿橫向左右各一支
+      const cx = x - Math.sin(q.a) * o, cy = y + Math.cos(q.a) * o;
+      if (!q.r) pr.box(cx, cy, 2.4, q.g ? 2.4 : 3.2, 0, q.top - capD, q.a);
+      else { const ring = []; for (let i = 0; i < 14; i++) ring.push([cx + Math.cos(i / 14 * 6.2832) * 1.35, cy + Math.sin(i / 14 * 6.2832) * 1.35]); pr.prism(ring, 0, q.top - capD); }
+    }
     pr.box(x, y, 2.8, q.cap, q.top - capD, q.top, q.a);
   }
   for (const r of d.rail_elevated || []) dk.ribbon(r.p.map(p => [p[0], p[1], 12]), 4.5, 0, 1.5);
@@ -411,6 +419,7 @@ function renderList() {
 function select(id, doFly) {
   if (sel && pmesh[sel]) for (const m of pmesh[sel]) m.material.emissive.setHex(0x000000);
   sel = id; const p = OV.proposals.find(q => q.id === id);
+  if (id) document.querySelectorAll('#dlist .on').forEach(b => b.classList.remove('on'));
   if (!p) { $('#card').style.display = 'none'; renderList(); return; }
   if (!showProp) setMode(true);
   for (const m of pmesh[id]) { m.material.emissive.setHex(0xff6a00); m.material.emissiveIntensity = .35; }
@@ -441,7 +450,7 @@ for (const [k, name, col] of LAYERS) {
   layEl.appendChild(l);
 }
 const A = OV.assumptions;
-$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩為每 30 m 一支、避開橫交道路的推估位置。<b>橋下現況</b>以全線每約 100 m 一點的街景判讀（共 35 點，各涵蓋前後最多 60 m）；延吉街以東有兩點無法取得路面影像，該段未判讀。街景拍攝於 2019–2025 年，現況可能已改變。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案設施的尺寸依規範數值試排，各說明卡列出依據與查證程度（已對照條文原文、僅部分查證、查無規範依據三級），位置仍是依政策文字推估，不是官方設計，也不能取代交通影響評估與專業簽證。`;
+$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩每 30 m 一排、避開橫交道路，位置為推估；單柱或雙柱依街景與簡報現況照片分段判讀，段界並非逐排核對。<b>橋下現況</b>以全線每約 100 m 一點的街景判讀（共 35 點，各涵蓋前後最多 60 m）；延吉街以東有兩點無法取得路面影像，該段未判讀。街景拍攝於 2019–2025 年，現況可能已改變。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案設施的尺寸依規範數值試排，各說明卡列出依據與查證程度（已對照條文原文、僅部分查證、查無規範依據三級），位置仍是依政策文字推估，不是官方設計，也不能取代交通影響評估與專業簽證。`;
 
 // 量測
 let measuring = false, mpts = []; const MG = new THREE.Group(); scene.add(MG);
@@ -497,7 +506,30 @@ $('#feasInfo').onclick = () => { const n = $('#feasNote'); n.hidden = !n.hidden;
   for (const p of OV.proposals) { const k = p.id.startsWith('c5_') ? 'c5' : p.id; if (!seen.has(k)) { seen.add(k); cnt[CR[p.id].level]++; } }
   $('#feasLegend').innerHTML = ['放不下或須重排', '大幅縮水或效益存疑', '可容納，須協調', '不在橋下，未評'].map((t, i) => `<span><i class="sw" style="background:${FHEX[i]}"></i>${t}（${cnt[i]}）</span>`).join('');
 }
-window.__app = { setFeas,  camera, controls, select, setZone, setMode, OV, view(p, t) { fly = null; camera.position.copy(V(...p)); controls.target.copy(V(...t)); controls.update(); } };
+// ---------- 簡報模擬圖核對 ----------
+const DG = G.deckpin;
+const DLV = ['與現況明顯不符', '部分不符或存疑', '未見明顯不符'];
+for (const d of DK.items) {
+  const pb = new Buf(); pb.box(d.at[0], d.at[1], .8, .8, 0, 30);
+  DG.add(pb.mesh(FCOL[d.level]));
+  const l = label('簡報 P' + d.page, d.at[0], d.at[1], 33, 'deck'); l.element.style.background = FHEX[d.level]; DG.add(l);
+}
+function selectDeck(page) {
+  select(null);
+  const d = DK.items.find(q => q.page === page); if (!d) return;
+  $('#cardBody').innerHTML = `<h3>簡報第 ${d.page} 頁｜${d.title}</h3><span class="tag">${d.zone}</span><span class="vd" style="background:${FHEX[d.level]}">${DLV[d.level]}</span>
+    <h4>模擬圖畫了什麼</h4><p>${d.shows}</p><h4>與現況比對</h4><p>${d.finding}</p>
+    <p style="color:var(--sub);font-size:12px">比對依據：${d.basis}。寬度以柱徑為比例目測，誤差約 1 m。</p>`;
+  $('#card').style.display = 'block'; $('#card').scrollTop = 0;
+  flyTo(d.at[0], d.at[1], 190, .62, -.5);
+  [...$('#dlist').children].forEach(b => b.classList.toggle('on', +b.dataset.p === page));
+}
+for (const d of DK.items) {
+  const b = document.createElement('button'); b.className = 'pitem'; b.dataset.p = d.page;
+  b.innerHTML = `<span class="dot" style="background:${FHEX[d.level]}"></span><span>P${d.page}　${d.title}</span><small>${d.zone.split(' ')[1]}</small>`;
+  b.onclick = () => selectDeck(d.page); $('#dlist').appendChild(b);
+}
+window.__app = { setFeas, selectDeck,  camera, controls, select, setZone, setMode, OV, view(p, t) { fly = null; camera.position.copy(V(...p)); controls.target.copy(V(...t)); controls.update(); } };
 
 (function loop() {
   requestAnimationFrame(loop);

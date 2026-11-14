@@ -178,6 +178,28 @@ def decks_at(x):
     return res
 
 
+# 橋墩形式分段：(x 起, x 訖, 是否圓柱, 雙柱中心距 m（0 為單柱）, 依據)
+# 依街景與簡報現況照片判讀；每段只有一到數張照片為據，段界為推估
+PIER_FORM = [
+    (-9999, -1250, 1, 0, '林森北路口街景：單支圓柱'),
+    (-1250, -600, 0, 0, '中央藝文公園北側街景：單支矩形高柱'),
+    (-600, 420, 0, 9.0, '懷生陸橋與建國高架旁現況照片：左右兩支矩形柱加橫梁（部分為鋼構門型）'),
+    (420, 650, 1, 0, '復興南路以東街景：單支圓柱'),
+    (650, 820, 1, 9.0, '大安路口現況照片：每排左右兩支圓柱'),
+    (820, 1300, 1, 0, '181 巷口與敦化南路以東街景：單支圓柱加懸臂帽梁'),
+    (1300, 1480, 1, 9.0, '四段 145–146 號現況照片：每排左右兩支圓柱'),
+    (1480, 9999, 1, 0, '延吉街以東街景：單支圓柱'),
+]
+COL_D = 2.7
+
+
+def pier_form(x):
+    for a, b, rnd, gap, why in PIER_FORM:
+        if a <= x < b:
+            return rnd, gap, why
+    return 1, 0, ''
+
+
 DET = {}
 for Z in M['zones']:
     zn = Z['name']
@@ -195,8 +217,9 @@ for Z in M['zones']:
             if zt > 6 and not any(seg_d((x, cy), c[i], c[i + 1]) < 11 for c in cross for i in range(len(c) - 1)):
                 ang = math.atan2(civic_y(x + 5) - civic_y(x - 5), 10)
                 span = (max(ys) - min(ys)) + max(d[2] for d in dk) * 0.8
+                rnd, gap, _ = pier_form(x)
                 det['piers'].append({'p': [x, round(cy, 1)], 'a': round(ang, 3), 'top': round(zt - GIRDER, 2),
-                                     'cap': round(span, 1), 'hi': 1 if zt > 13 else 0})
+                                     'cap': round(max(span, gap + 5), 1), 'hi': 1 if zt > 13 else 0, 'r': rnd, 'g': gap})
         x += 30
     for oi, (ox, typ, extra) in enumerate(OBS):
         if not (Z['x0'] <= ox < Z['x1']):

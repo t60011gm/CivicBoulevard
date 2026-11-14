@@ -118,11 +118,13 @@ for Z in SC['zones']:
         pp.ribbon(l, .4, .9, .9)
     for q in d['det']['piers']:
         x, y = q['p']
-        if q['hi']:
-            pr.box(x, y, 2.4, 3.2, 0, q['top'] - 1.8, q['a'])
-        else:
-            pr.prism([(x + math.cos(i / 16 * math.tau) * 1.35, y + math.sin(i / 16 * math.tau) * 1.35) for i in range(16)],
-                     0, q['top'] - 1.8)
+        for o in ([-q['g'] / 2, q['g'] / 2] if q.get('g') else [0]):
+            cx, cy = x - math.sin(q['a']) * o, y + math.cos(q['a']) * o
+            if not q.get('r'):
+                pr.box(cx, cy, 2.4, 2.4 if q.get('g') else 3.2, 0, q['top'] - 1.8, q['a'])
+            else:
+                pr.prism([(cx + math.cos(i / 16 * math.tau) * 1.35, cy + math.sin(i / 16 * math.tau) * 1.35) for i in range(16)],
+                         0, q['top'] - 1.8)
         pr.box(x, y, 2.8, q['cap'], q['top'] - 1.8, q['top'], q['a'])
     dk.make(zn + '_高架橋面板', 'deck', vc)
     gd.make(zn + '_高架箱型梁', 'girder', vc)

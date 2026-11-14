@@ -130,9 +130,20 @@ def under_site(pid, zone, title, x0, x1, desc, build, src=None):
         checks.append([0, '此處 OSM 無雙向平面車道資料，分隔帶寬度以 7.3 m 保守假設，須現場量測'])
     else:
         checks.append([1, '分隔帶推估寬 %.1f m，扣除兩側各 %.1f m 側向淨距（本模型取值，規範無對應條文）與圍籬後，可用寬 %.1f m' % (U + 2 * SIDE + 2 * FENCE_T, SIDE, U)])
+    forms = [pier_form(x0 + (x1 - x0) * k / 4) for k in range(5)]
+    tw = [f for f in forms if f[1]]
+    if tw:
+        gap = tw[0][1]
+        full = U + 2 * SIDE + 2 * FENCE_T
+        inner = gap - COL_D - 1.0                           # 兩柱之間，扣柱徑與兩側各 0.5 m
+        outer = (full - gap - COL_D) / 2 - SIDE - FENCE_T   # 柱外側到車道
+        U2 = round(max(inner, outer, 0), 1)
+        checks.append([0, '此段每排橋墩是左右兩支柱子（中心距約 %.0f m，%s），分隔帶被切成三條：兩柱之間淨寬約 %.1f m、兩外側各約 %.1f m。設施只能放在其中一條，可用寬由 %.1f m 降為 %.1f m' % (
+            gap, tw[0][2].split('：')[0], inner, max(outer, 0), U, U2)])
+        U = max(U2, 1.0)
     sl, npier = slots(x0, x1)
     if npier:
-        checks.append([1, '範圍內有 %d 支橋墩（推估位置），設施已避開橋墩前後各 2.5 m' % npier])
+        checks.append([1, '範圍內有 %d 排橋墩（推估位置），設施已避開橋墩前後各 2.5 m' % npier])
     specs, summary = build(x0, x1, U, sl, parts, checks)
     access_check(x0, x1, checks)
     kw = {'src': src} if src else {}
