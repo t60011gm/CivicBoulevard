@@ -182,4 +182,61 @@ for p in OV['proposals']:
         print('    端點 %d：階梯與電梯取樣 %d 點，落在建物範圍 %d 點、落在車道範圍 %d 點；此處車道邊到建物面約 %.1f m（距車道邊 %.1f、距建物 %.1f），放 2 m 寬階梯後剩 %.1f m' % (
             i + 1, e['n'], e['in_building'], e['in_road'], e['gap'], e['d_road'], e['d_bld'], e['left']))
 
-json.dump({'under': rows, 'bridges': bridges}, open(os.path.join(BASE, 'web/data/critique.json'), 'w'), ensure_ascii=False, indent=1)
+# ---------- 彙整成每個提案一筆，供網站顯示 ----------
+LEVEL = {'放不下': 0, '大幅縮水': 1, '可容納，須協調': 2}
+AIR = {'a2': (0, '高：運動時換氣量大，離車道邊約 0.65 m'), 'a3': (0, '高：兒童久留，離車道邊約 0.65 m'),
+       'a4': (0, '高：飼主與寵物久留，離車道邊約 0.65 m'), 'c1': (1, '中：久留加上飲食，營業多在夜間'),
+       'c2': (1, '中：活動期間久留'), 'c3': (1, '中：活動期間久留'),
+       'a5': (2, '低：步行短暫通過'), 'b1a': (2, '低：步行短暫通過'), 'b1b': (2, '低：步行短暫通過')}
+AIR_NOTE = '查無市民大道橋下的空氣品質實測與車流量資料，此為依停留時間與使用者所做的定性判斷，須實地量測 PM2.5 與 NO₂。'
+by = {}
+for r in rows:
+    fx = sum(r['fixed'].values())
+    c1 = '範圍內有 %d 支橋墩（間距約 30 m、柱寬約 2.7 m），橋墩之間無柱空間最長約 22 m。' % r['piers']
+    if r['mode'] == 'clear':
+        c1 += '此設施需要無柱淨空 %d m（%s），扣除後最長連續 %d m。' % (r['need'], r['why'], r['longest'])
+    elif r['mode'] == 'area':
+        c1 += '此設施可跨橋墩配置，橋墩只扣除占用面積。'
+    else:
+        c1 += '步道須繞過每支橋墩。'
+    if fx:
+        c2 = '不可移除：' + '、'.join('%s %d m' % kv for kv in r['fixed'].items()) + '，占範圍 %d%%。' % round(fx / r['L'] * 100)
+    else:
+        c2 = '範圍內沒有判讀到不可移除的設施。'
+    if r['movable']:
+        c2 += '需協調釋出：' + '、'.join('%s %d m' % kv for kv in r['movable'].items() if kv[1]) + '。'
+    if r['unsurveyed'] > 5:
+        c2 += '另有 %d m 未判讀。' % r['unsurveyed']
+    if r['width_fail']:
+        c2 += '分隔帶寬度也不足。'
+    by[r['id']] = {'verdict': r['verdict'], 'level': LEVEL.get(r['verdict'], 3), 'c1': c1, 'c2': c2,
+                   'c3': '不涉及人行天橋。', 'c4': AIR[r['id']][1] + '。' + AIR_NOTE, 'air': AIR[r['id']][0]}
+BR = {'a1': (1, '設置條件存疑', '走陸橋約 %d 秒；繞到最近的行穿線約 203 秒再加等候，是三座中唯一有時間優勢的。但離最近行穿線僅約 85 m，不符規範「不宜小於 200 m」。'),
+      'b5': (1, '效益存疑', '走陸橋約 %d 秒；13 m 外就有行穿線，遇綠燈時走平面約快一倍。'),
+      'c4': (0, '位置須重排，預期少人使用', '走陸橋約 %d 秒；同一側走人行道只要約 222 秒，且不用爬 5.5 m。')}
+for b in bridges:
+    lv, vd, use = BR[b['id']]
+    ln = b['line']
+    c3 = '橋身取樣 %d 點中有 %d 點在車道上方，橋柱須避開車道。' % (ln['n'], ln['over_road'])
+    for i, e in enumerate(b['ends']):
+        where = '落在車道範圍，須轉向' if e['in_road'] >= 5 else ('與建物重疊' if e['in_building'] >= 5 else
+                 '車道邊到建物面約 %.0f m，放階梯與電梯後約剩 %.0f m' % (e['gap'], e['left'] - 0.6))
+        c3 += '端點 %d：%s。' % (i + 1, where)
+    c3 += use % b['t_bridge'] + '（階梯速率以 0.5 m/s 假設；車道寬為估算值，誤差約 2 m。）'
+    by[b['id']] = {'verdict': vd, 'level': lv, 'c1': '陸橋位於高架外側或下方穿越，橋柱須與既有橋墩錯開。', 'c2': '不占用橋下分隔帶。',
+                   'c3': c3, 'c4': '低：通行短暫。' + AIR_NOTE, 'air': 2}
+for p in OV['proposals']:
+    if p['id'] in by:
+        continue
+    if p['cat'] == '平面穿越':
+        by[p['id']] = {'verdict': '可行', 'level': 2, 'c1': '庇護島設在橋墩之間，橋墩會遮擋駕駛視線，停止線須退後。',
+                       'c2': '利用既有行穿線位置，不需移除設施。', 'c3': '不涉及人行天橋；平面穿越符合規範「以平面穿越為原則」。',
+                       'c4': '低：等候與通過時間短。' + AIR_NOTE, 'air': 2}
+    else:
+        by[p['id']] = {'verdict': '不在橋下，未列入此項檢查', 'level': 3, 'c1': '不在高架橋下。', 'c2': '不在高架橋下。',
+                       'c3': '不涉及人行天橋。', 'c4': '離車道較遠，未評。', 'air': 3}
+cnt = {}
+for v in by.values():
+    cnt[v['level']] = cnt.get(v['level'], 0) + 1
+print('levels', cnt)
+json.dump({'under': rows, 'bridges': bridges, 'by': by}, open(os.path.join(BASE, 'web/data/critique.json'), 'w'), ensure_ascii=False, indent=1)
