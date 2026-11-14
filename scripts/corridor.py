@@ -512,7 +512,34 @@ for x0, dr in UG_ENT:
     add_box(Q[-1]['x'], Q[-1]['y'], 7, 6.2, .3, 3.2, pts[-1][2], 'ugportal')
     add_box(Q[0]['x'] - dr * 3, Q[0]['y'], 2.2, 2.2, .3, 2.9, pts[0][2], 'kiosk')
 
-json.dump({'strips': strips, 'boxes': boxes, 'piers': piers, 'centers': centers, 'girder': GD,
+# =====================================================================
+# 5. 通風與機電設施（街景逐點判讀；沿線約每 100–200 m 看一點，點與點之間可能有遺漏）
+# =====================================================================
+# (x, 類型, 沿路長, 橫向寬, 高, 說明, 把握度)
+VENTS = [
+    (-1562, 'tower', 4, 4, 5.0, '通風設施（林森北路口）', '位置為概略'),
+    (-1300, 'kiosk', 12, 4, 3.2, '地下停車場行人梯廳（林森–金山 3 號）', '橫向位置未確認，可能在路側而非分隔帶'),
+    (200, 'tower', 3.2, 3.2, 7.0, '橋墩旁通風塔（上段有百葉）', '中'),
+    (300, 'building', 40, 7, 5.0, '橋下長條機房（安東街口）', '長度為目測'),
+    (400, 'building', 25, 7, 6.5, '通風機房（大型百葉）', '中'),
+    (950, 'low', 12, 4, 2.5, '低矮通風構造與地面格柵（敦化南路口西側）', '中'),
+    (1085, 'building', 70, 5, 3.2, '石材牆面機電與通風構造（牆面有百葉）', '長度為目測'),
+    (1350, 'grate', 20, 5, 0.45, '下沉車道上方的鋼格柵', '中'),
+]
+vents = []
+for x, typ, L_, W_, H_, note, conf in VENTS:
+    y0, y1 = civic_mid(x - 5), civic_mid(x + 5)
+    a = math.atan2(y1 - y0, 10)
+    y = civic_mid(x)
+    if typ == 'grate':
+        add_box(x, y, L_, W_, .3, H_, a, 'grate')
+    else:
+        add_box(x, y, L_, W_, .3, H_, a, 'vent')
+        if typ != 'kiosk':                      # 百葉：兩側外凸的深色帶
+            add_box(x, y, L_ * .8, W_ + .16, H_ * .55, H_ * .88, a, 'louver')
+    vents.append({'p': [R2(x), R2(y), R2(H_ + 2)], 't': note, 'conf': conf})
+
+json.dump({'strips': strips, 'boxes': boxes, 'piers': piers, 'centers': centers, 'girder': GD, 'vents': vents,
            'ug': [{'x': x, 'dir': d} for x, d in UG_ENT]},
           open(os.path.join(BASE, 'web/data/corridor.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
 by = collections.Counter(s['r'] for s in strips)
