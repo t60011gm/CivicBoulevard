@@ -645,13 +645,15 @@ function fleet(group, geo, color, list) {           // list: [{path, s, v, loop}
   agents.push({ m, list });
 }
 {
-  const car = new THREE.BoxGeometry(1.8, 1.4, 4.4); car.translate(0, .9, 0);
+  const car = new THREE.BoxGeometry(1.6, 1.3, 3.8); car.translate(0, .8, 0);
   const man = new THREE.BoxGeometry(.9, 1.7, .9); man.translate(0, .85, 0);
   const cars = [], pedsNow = [], pedsOk = [], pedsBad = [];
   for (const v of FL.veh) {
-    const path = mkPath(v.pts), gap = v.k === 'deck' ? 55 : 38, sp = v.k === 'deck' ? 13 : 8;
-    for (let s = Math.random() * gap; s < path.len; s += gap * (.6 + Math.random() * .8))
-      cars.push({ path: { ...path }, s, v: sp * (.85 + Math.random() * .3), loop: 0, y: v.k === 'deck' ? .35 : 0 });
+    const path = mkPath(v.pts), gap = v.k === 'deck' ? 60 : 42, sp = v.k === 'deck' ? 13 : 8;
+    const lane = v.k === 'deck' ? 1.75 : ((v.w || 7) - .5) / 4;        // 兩個車道的中心各離道路中心線 1/4 路寬
+    for (const off of [-lane, lane])
+      for (let s = Math.random() * gap; s < path.len; s += gap * (.6 + Math.random() * .8))
+        cars.push({ path: { ...path }, s, v: sp * (.85 + Math.random() * .3), loop: 0, y: v.k === 'deck' ? .35 : 0, off });
   }
   const addPeds = (arr, f, n) => { const path = mkPath(f.pts); if (path.len < 2) return;
     const k = n ?? Math.max(2, Math.round(path.len / 28));
@@ -696,7 +698,8 @@ function stepFlows() {
       if (g.loop) { if (g.s > g.path.len) { g.s = g.path.len; g.v = -g.v; } else if (g.s < 0) { g.s = 0; g.v = -g.v; } }
       else if (g.s > g.path.len) g.s -= g.path.len;
       const yaw = posAt(g.path, g.s, _dp);
-      _dm.position.set(_dp.x, _dp.y + g.y, _dp.z); _dm.rotation.set(0, g.v < 0 ? yaw + Math.PI : yaw, 0); _dm.updateMatrix();
+      const o = g.off || 0;
+      _dm.position.set(_dp.x + Math.cos(yaw) * o, _dp.y + g.y, _dp.z - Math.sin(yaw) * o); _dm.rotation.set(0, g.v < 0 ? yaw + Math.PI : yaw, 0); _dm.updateMatrix();
       a.m.setMatrixAt(i, _dm.matrix);
     }
     a.m.instanceMatrix.needsUpdate = true;

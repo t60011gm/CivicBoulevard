@@ -27,7 +27,7 @@ def R(v):
     return round(v, 1)
 
 
-veh = [{'k': v['k'], 'pts': v['pts'][::2] + [v['pts'][-1]]} for v in CO['vpaths']]
+veh = [{'k': v['k'], 'w': v.get('w', 0), 'pts': v['pts'][::2] + [v['pts'][-1]]} for v in CO['vpaths']]
 ped_now = [{'pts': w[::2] + [w[-1]], 'loop': 0} for w in CO['wpaths'] if len(w) > 3]
 cross_x = sorted(x for z in OV['stats'].values() for x in z['cross_x'])
 for x in cross_x:
