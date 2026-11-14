@@ -22,7 +22,8 @@ M = {'deck': mat('CB_橋面板', (.62, .64, .68)), 'girder': mat('CB_箱型梁',
      'pier': mat('CB_橋墩帽梁', (.45, .46, .49)), 'parapet': mat('CB_護欄', (.70, .71, .74)),
      'wall': mat('CB_隔音牆', (.55, .75, .66), .55), 'parking': mat('CB_橋下停車場', (.40, .47, .57)),
      'green': mat('CB_橋下綠帶', (.28, .58, .26)), 'open': mat('CB_橋下路口淨空', (.84, .80, .70)),
-     'ug': mat('CB_地下停車場出入口', (.58, .40, .80)), 'car': mat('CB_停放車輛示意', (.80, .82, .85))}
+     'ug': mat('CB_地下停車場出入口', (.58, .40, .80)), 'car': mat('CB_停放車輛示意', (.80, .82, .85)),
+     'ramp': mat('CB_匝道引道', (.55, .57, .60)), 'facility': mat('CB_橋下機房設施', (.62, .42, .26)), 'paved': mat('CB_鋪面小廣場', (.80, .75, .62))}
 
 
 class Buf:
@@ -150,8 +151,13 @@ for Z in SC['zones']:
             for i in (int(n * .3), int(n * .7)):
                 x, y, a = at(i)
                 ex.box(x, y, 9, min(m['w'] * .6, 5), .4, 3.4, a)
+        elif m['t'] == 'ramp':
+            ex.ribbon(pts, min(m['w'] * .6, 7), 3.2, 2.9)
+        elif m['t'] == 'facility':
+            x, y, a = at(n // 2)
+            ex.box(x, y, 16, min(m['w'] * .6, 7), .4, 5.5, a)
         key = 'green' if m['t'] in ('green', 'uturn') else m['t']
-        nm = zn + '_' + m['label'].replace('街景判讀：', '')
+        nm = zn + '_%+05d_' % m['x'] + m['label'].replace('街景判讀：', '')
         mb.make(nm, key, uc)
         ex.make(nm + '_量體', 'car' if m['t'] == 'parking' else key, uc)
     print(zn, 'piers', len(d['det']['piers']), 'median', len(d['det']['median']))

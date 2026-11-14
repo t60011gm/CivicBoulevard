@@ -220,6 +220,7 @@ function label(text, x, y, z, cls) {
   const el = document.createElement('div'); el.className = 'lbl ' + cls; el.textContent = text;
   const o = new CSS2DObject(el); o.position.copy(V(x, y, z)); return o;
 }
+const underLabels = [];
 const add = (key, mesh) => { if (mesh) G[key].add(mesh); return mesh; };
 const GD = OV.girder || 2.3;
 const AREA = { park: [0x7dbb68, .06, 'green'], grass: [0x93c97c, .08, 'green'], playground: [0xf0a85a, .12, 'green'], pitch: [0x4f9d8f, .1, 'green'],
@@ -279,7 +280,7 @@ for (const Z of SC.zones) {
   add('viaduct', dk.mesh(0xa3a9b3)); add('viaduct', gd.mesh(0x8d939d)); add('viaduct', pr.mesh(0x7b8088));
   add('viaduct', pp.mesh(0xb9bdc4)); add('viaduct', nw.mesh(0x9fc7b4, { transparent: true, opacity: .55 }));
   // 橋下中央分隔帶現況（街景抽樣判讀）
-  const UC = { parking: 0x6f7f95, green: 0x4f9a4a, uturn: 0x4f9a4a, open: 0xd9cfb8, ug: 0x9b6bd0 };
+  const UC = { parking: 0x6f7f95, green: 0x4f9a4a, uturn: 0x4f9a4a, open: 0xd9cfb8, ug: 0x9b6bd0, ramp: 0x8a8f98, facility: 0xb07a4a, paved: 0xcbbf9f };
   for (const m of d.det.median) {
     const mb = new Buf(), ex = new Buf(), n = m.pts.length;
     mb.ribbon(m.pts, m.w, .32, .1);
@@ -290,8 +291,10 @@ for (const Z of SC.zones) {
     }
     if (m.t === 'green' || m.t === 'uturn') ex.ribbon(m.pts, m.w * .7, 1.3, .9);
     if (m.t === 'ug') for (const i of [Math.floor(n * .3), Math.floor(n * .7)]) { const [x, y, a] = at(i); ex.box(x, y, 9, Math.min(m.w * .6, 5), .4, 3.4, a); }
-    add('under', mb.mesh(UC[m.t])); add('under', ex.mesh(m.t === 'parking' ? 0xc9ced6 : m.t === 'ug' ? 0x7d4fb8 : 0x3d7f3a));
-    const c = m.pts[n >> 1]; G.under.add(label(m.label, c[0], c[1], 5, 'under'));
+    if (m.t === 'ramp') ex.ribbon(m.pts, Math.min(m.w * .6, 7), 3.2, 2.9);
+    if (m.t === 'facility') { const [x, y, a] = at(n >> 1); ex.box(x, y, 16, Math.min(m.w * .6, 7), .4, 5.5, a); }
+    add('under', mb.mesh(UC[m.t])); add('under', ex.mesh({ parking: 0xc9ced6, ug: 0x7d4fb8, ramp: 0x9aa0a8, facility: 0x8e5f37 }[m.t] || 0x3d7f3a));
+    const c = m.pts[n >> 1], ul = label(m.label, c[0], c[1], 5, 'under'); G.under.add(ul); underLabels.push(ul);
   }
   const fb = new Buf(); for (const r of d.footbridge || []) fb.ribbon(r.p, Math.max(r.w, 3), 0, .6);
   add('viaduct', fb.mesh(0x2a8fe0));
@@ -418,7 +421,7 @@ for (const [k, name, col] of LAYERS) {
   layEl.appendChild(l);
 }
 const A = OV.assumptions;
-$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩為每 30 m 一支、避開橫交道路的推估位置。<b>橋下現況</b>只在 10 個街景抽樣點各標示前後 50 m，其餘路段未判讀。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案設施的尺寸依規範數值試排，各說明卡列出依據與查證程度（已對照條文原文、僅部分查證、查無規範依據三級），位置仍是依政策文字推估，不是官方設計，也不能取代交通影響評估與專業簽證。`;
+$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩為每 30 m 一支、避開橫交道路的推估位置。<b>橋下現況</b>以全線每約 100 m 一點的街景判讀（共 35 點，各涵蓋前後最多 60 m）；延吉街以東有兩點無法取得路面影像，該段未判讀。街景拍攝於 2019–2025 年，現況可能已改變。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案設施的尺寸依規範數值試排，各說明卡列出依據與查證程度（已對照條文原文、僅部分查證、查無規範依據三級），位置仍是依政策文字推估，不是官方設計，也不能取代交通影響評估與專業簽證。`;
 
 // 量測
 let measuring = false, mpts = []; const MG = new THREE.Group(); scene.add(MG);
@@ -469,6 +472,7 @@ window.__app = { camera, controls, select, setZone, setMode, OV, view(p, t) { fl
   }
   controls.update();
   const dist = camera.position.distanceTo(controls.target);
+  if (G.under.visible) for (const o of underLabels) o.visible = dist < 650;
   if (G.label.visible) for (const o of placeLabels) o.visible = o.userData.k === 'road' ? dist < 900 : dist < 1900;
   renderer.render(scene, camera); lr.render(scene, camera);
 })();

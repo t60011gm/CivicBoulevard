@@ -62,10 +62,18 @@ def plen(pts):
 GIRDER = 2.3   # 橋面到梁底（街景估計）
 # 街景抽樣判讀的橋下中央分隔帶現況：(x, 類型, 補充)
 OBS_T = {'parking': ('橋下平面收費停車場', 0), 'green': ('植栽綠帶', 0), 'uturn': ('植栽綠帶與迴轉道', 0),
-         'open': ('路口淨空', 0), 'ug': ('地下停車場出入口與梯廳', 0)}
-OBS = [(-1562, 'green', '林森北路口，有通風設施'), (-1400, 'parking', ''), (-1150, 'green', '路口旁'), (-900, 'uturn', ''),
-       (-450, 'open', '新生北路、松江路口'), (-250, 'open', '建國高架下方路口'), (100, 'parking', ''), (600, 'uturn', ''),
-       (850, 'ug', '市民地下停車場'), (1250, 'ug', '')]
+         'open': ('路口淨空', 0), 'ug': ('地下停車場出入口、車道或梯廳', 0), 'ramp': ('匝道引道與擋土牆', 0),
+         'facility': ('橋下機房或管理設施建物', 0), 'paved': ('鋪面小廣場與公共藝術', 0)}
+# 全線每約 100 m 一點；1550、1650 兩點只取得橋面或室內影像，無法判讀，未列入
+OBS = [(-1700, 'green', ''), (-1562, 'green', '林森北路口，有通風設施'), (-1500, 'open', '林森北路口'), (-1400, 'parking', ''),
+       (-1300, 'ug', '林森–金山地下停車場車道口'), (-1230, 'green', ''), (-1150, 'green', '路口旁'), (-1050, 'ug', '地下車道引道'),
+       (-900, 'uturn', ''), (-800, 'green', '金山北路口'), (-700, 'green', ''), (-600, 'open', '路口'), (-520, 'green', ''),
+       (-450, 'open', '新生北路、松江路口'), (-350, 'parking', ''), (-250, 'open', '建國高架下方路口'), (-170, 'ramp', ''),
+       (-80, 'ramp', ''), (0, 'ramp', '匝道下方另有圍籬圈圍空間'), (100, 'parking', ''), (200, 'uturn', ''),
+       (300, 'facility', '安東街口'), (400, 'facility', '通風機房'), (500, 'open', '復興南路口'), (600, 'uturn', ''),
+       (700, 'open', '路口'), (780, 'parking', ''), (850, 'ug', '市民地下停車場'), (950, 'paved', '敦化南路口'),
+       (1050, 'ug', '車道引道擋土牆'), (1150, 'ug', ''), (1250, 'ug', ''), (1350, 'ug', '車道出入口'),
+       (1450, 'green', '延吉街口'), (1750, 'green', '')]
 
 P = []
 
@@ -190,12 +198,16 @@ for Z in M['zones']:
                 det['piers'].append({'p': [x, round(cy, 1)], 'a': round(ang, 3), 'top': round(zt - GIRDER, 2),
                                      'cap': round(span, 1), 'hi': 1 if zt > 13 else 0})
         x += 30
-    for ox, typ, extra in OBS:
+    for oi, (ox, typ, extra) in enumerate(OBS):
         if not (Z['x0'] <= ox < Z['x1']):
             continue
         mw = median_width(ox)
         mw = max(5.0, min(14.0, mw if mw else 8.0))
-        a, b = max(Z['x0'] + 1, ox - 50), min(Z['x1'] - 1, ox + 50)
+        lo = (ox + OBS[oi - 1][0]) / 2 if oi > 0 else ox - 60          # 各點涵蓋到與相鄰點的中點，最多前後 60 m
+        hi = (ox + OBS[oi + 1][0]) / 2 if oi < len(OBS) - 1 else ox + 60
+        a, b = max(Z['x0'] + 1, lo, ox - 60), min(Z['x1'] - 1, hi, ox + 60)
+        if b - a < 4:
+            continue
         det['median'].append({'t': typ, 'w': round(mw, 1), 'pts': line_along(a, b, 0.0, 10.0), 'x': ox,
                               'label': '街景判讀：' + OBS_T[typ][0] + ('（' + extra + '）' if extra else '')})
     DET[zn] = det

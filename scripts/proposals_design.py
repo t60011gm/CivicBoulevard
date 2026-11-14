@@ -81,11 +81,12 @@ def access_check(x0, x1, checks):
     else:
         d = min(abs(c - (x0 + x1) / 2) for c in ALL_CROSS)
         checks.append([0, '範圍 25 m 內沒有跨市民大道的行穿線（最近一處距中心約 %.0f m），必須新增行穿線與行人號誌，否則民眾無法安全進入分隔帶' % d])
-    obs = [o for o in OBS if x0 - 50 < o[0] < x1 + 50]
+    obs = [o for o in OBS if x0 - 40 < o[0] < x1 + 40]
     tail = {'parking': '，需協調停管單位釋出車位', 'ug': '，出入口與梯廳不可封閉，量體須避開',
-            'uturn': '，需取消或移設迴轉道', 'open': '，此處無分隔帶可用', 'green': '，需移植既有植栽'}
+            'uturn': '，需取消或移設迴轉道', 'open': '，此處無分隔帶可用', 'green': '，需移植既有植栽',
+            'ramp': '，匝道結構占用分隔帶，無法設置設施', 'facility': '，既有建物須保留或遷移', 'paved': '，可直接利用'}
     for o in obs:
-        checks.append([0, '街景判讀現況：' + OBS_T[o[1]][0] + ('（' + o[2] + '）' if o[2] else '') + tail[o[1]]])
+        checks.append([1 if o[1] == 'paved' else 0, '街景判讀現況：' + OBS_T[o[1]][0] + ('（' + o[2] + '）' if o[2] else '') + tail[o[1]]])
     if not obs:
         checks.append([0, '此段橋下現況未經街景判讀，須現勘'])
 
