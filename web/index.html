@@ -786,7 +786,8 @@ function fleet(group, geo, color, list) {           // list: [{path, s, v, loop,
   $('#cpopX').onclick = () => openConf(null);
   $('#probBtn').onclick = () => { confOn = !confOn; syncConf(); };
   $('#confBtn').onclick = () => { confOn = true; if (!showProp) setMode(true); else syncConf(); ci = (ci + 1) % big.length; const c = big[ci];
-    flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confBtn').textContent = `衝突 ${ci + 1}/${big.length}：下一處`; };
+    flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confBtn').textContent = `衝突 ${ci + 1}/${big.length}：下一處`;
+    openConf(c._l || null); };
   $('#flowBtn').onclick = () => { flowOn = !flowOn; $('#flowBtn').classList.toggle('on', flowOn); $('#flowBtn').textContent = '動畫：' + (flowOn ? '開' : '關'); FG.visible = flowOn; FPG.visible = flowOn && showProp; FPG.traverse(o => { if (o.isCSS2DObject) o.visible = flowOn && showProp; }); };
   if (!flowOn) { $('#flowBtn').classList.remove('on'); $('#flowBtn').textContent = '動畫：關'; FG.visible = false; }
 }
