@@ -154,7 +154,7 @@ import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/exampl
 import { CSS2DRenderer, CSS2DObject } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js/+esm';
 
 const $ = s => document.querySelector(s);
-const [SC, OV, CQ, DK] = await Promise.all(['scene', 'overlay', 'critique', 'deck'].map(f => fetch('data/' + f + '.json').then(r => r.json())));
+const [SC, OV, CQ, DK, CO] = await Promise.all(['scene', 'overlay', 'critique', 'deck', 'corridor'].map(f => fetch('data/' + f + '.json').then(r => r.json())));
 const CR = CQ.by, FCOL = [0xd32f2f, 0xf59e0b, 0x2e9e5b, 0x9aa3ad], FHEX = ['#d32f2f', '#f59e0b', '#2e9e5b', '#9aa3ad'];
 const worst = p => p.id.startsWith('c5_') ? CR['c5_0'] : CR[p.id];
 
@@ -268,7 +268,7 @@ for (const Z of SC.zones) {
   for (const b of d.buildings) (b.k ? bk : b.e ? b2 : b1).prism(b.p, 0, b.h);
   add('bld', b1.mesh(0xe6e4de)); add('bld', b2.mesh(0xd3c4ae)); add('key', bk.mesh(0xe8a064));
   const r1 = new Buf(), r2 = new Buf();
-  for (const r of d.road) (r.c ? r2 : r1).ribbon(r.p, r.w, .15);
+  for (const r of d.road) if (!r.x) (r.c ? r2 : r1).ribbon(r.p, r.w, .15);
   add('road', r1.mesh(0x5a5f67)); add('road', r2.mesh(0x33373d));
   const w = new Buf();
   for (const k of ['footway', 'steps', 'cycleway']) for (const r of d[k] || []) w.ribbon(r.p, r.w, .2);
@@ -283,6 +283,7 @@ for (const Z of SC.zones) {
   // 高架橋體：橋面板＋箱型梁＋護欄＋隔音牆＋橋墩帽梁（斷面與高度依街景照片估計）
   const dk = new Buf(), gd = new Buf(), pr = new Buf(), pp = new Buf(), nw = new Buf();
   for (const r of d.viaduct) {
+    if (r.x) continue;
     const W = r.W || r.w, main = r.c && r.t;
     dk.ribbon(r.p, W, 0, .35);
     gd.ribbon(r.p.map(q => [q[0], q[1], q[2] - .35]), W * .55, 0, GD - .35);
@@ -297,17 +298,6 @@ for (const Z of SC.zones) {
       }
       acc -= seg;
     }
-  }
-  for (const l of d.det.outer) { pp.ribbon(l, .4, 1.0, 1.0); nw.ribbon(l, .15, 3.2, 2.2); }
-  for (const l of d.det.inner) pp.ribbon(l, .4, .9, .9);
-  for (const q of d.det.piers) {
-    const [x, y] = q.p, capD = 1.8, offs = q.g ? [-q.g / 2, q.g / 2] : [0];
-    for (const o of offs) {                                   // 雙柱：沿橫向左右各一支
-      const cx = x - Math.sin(q.a) * o, cy = y + Math.cos(q.a) * o;
-      if (!q.r) pr.box(cx, cy, 2.4, q.g ? 2.4 : 3.2, 0, q.top - capD, q.a);
-      else { const ring = []; for (let i = 0; i < 14; i++) ring.push([cx + Math.cos(i / 14 * 6.2832) * 1.35, cy + Math.sin(i / 14 * 6.2832) * 1.35]); pr.prism(ring, 0, q.top - capD); }
-    }
-    pr.box(x, y, 2.8, q.cap, q.top - capD, q.top, q.a);
   }
   for (const r of d.rail_elevated || []) dk.ribbon(r.p.map(p => [p[0], p[1], 12]), 4.5, 0, 1.5);
   add('viaduct', dk.mesh(0xa3a9b3)); add('viaduct', gd.mesh(0x8d939d)); add('viaduct', pr.mesh(0x7b8088));
@@ -335,6 +325,37 @@ for (const Z of SC.zones) {
   add('misc', tb.mesh(0x3e7d3e));
   const mb = new Buf(); for (const [x, y] of d.metro) mb.box(x, y, 5, 5, 0, 4);
   add('misc', mb.mesh(0xd81b7a));
+}
+
+// ---------- 市民大道廊道（連續橋體、匝道、車道、人行道、地下車道） ----------
+{
+  const CR_ = { deck: ['viaduct', 0xa3a9b3], girder: ['viaduct', 0x8d939d], parapet: ['viaduct', 0xb9bdc4], nwall: ['viaduct', 0x9fc7b4, { transparent: true, opacity: .5 }],
+    rampfill: ['viaduct', 0x979ca5], pier: ['viaduct', 0x7b8088], croad: ['road', 0x33373d], mark: ['road', 0xf2f2f2], walk: ['walk', 0xc9bfa9], curb: ['walk', 0x9a9a96],
+    island: ['under', 0xb7b3a6], ugramp: ['under', 0x2a2d33], ugwall: ['under', 0x8f8f8a], ugportal: ['under', 0x5b4a8a], kiosk: ['under', 0xe0a800] };
+  const bufs = {};
+  const strip = (b, st) => {
+    const n = st.L.length, base = b.n;
+    for (const q of st.L) b.v(q[0], q[1], q[2]); for (const q of st.R) b.v(q[0], q[1], q[2]);
+    for (let i = 0; i < n - 1; i++) b.quad(base + i, base + n + i, base + n + i + 1, base + i + 1);
+    if (!st.t) return;
+    const c = b.n, bot = q => st.t < 0 ? 0 : q[2] - st.t;          // t<0：往下填到地面
+    for (const q of st.L) b.v(q[0], q[1], bot(q)); for (const q of st.R) b.v(q[0], q[1], bot(q));
+    for (let i = 0; i < n - 1; i++) { b.quad(c + i + 1, c + n + i + 1, c + n + i, c + i); b.quad(base + i + 1, c + i + 1, c + i, base + i); b.quad(base + n + i, c + n + i, c + n + i + 1, base + n + i + 1); }
+    b.quad(base, c, c + n, base + n); b.quad(base + n - 1, base + 2 * n - 1, c + 2 * n - 1, c + n - 1);
+  };
+  for (const st of CO.strips) strip(bufs[st.r] ??= new Buf(), st);
+  for (const bx of CO.boxes) (bufs[bx.r] ??= new Buf()).box(bx.c[0], bx.c[1], bx.s[0], bx.s[1], bx.z[0], bx.z[1], bx.a);
+  const pr = bufs.pier ??= new Buf();
+  for (const q of CO.piers) {
+    const [x, y] = q.p, capD = 1.8, offs = q.g ? [-q.g / 2, q.g / 2] : [0];
+    for (const o of offs) {
+      const cx = x - Math.sin(q.a) * o, cy = y + Math.cos(q.a) * o;
+      if (!q.r) pr.box(cx, cy, 2.4, q.g ? 2.4 : 3.2, 0, q.top - capD, q.a);
+      else { const ring = []; for (let i = 0; i < 14; i++) ring.push([cx + Math.cos(i / 14 * 6.2832) * 1.35, cy + Math.sin(i / 14 * 6.2832) * 1.35]); pr.prism(ring, 0, q.top - capD); }
+    }
+    pr.box(x, y, 2.8, q.cap, q.top - capD, q.top, q.a);
+  }
+  for (const r in bufs) { const [layer, col, opt] = CR_[r] || ['viaduct', 0x999999]; add(layer, bufs[r].mesh(col, opt || {})); }
 }
 
 // ---------- 標註 ----------
@@ -458,7 +479,7 @@ for (const [k, name, col] of LAYERS) {
   layEl.appendChild(l);
 }
 const A = OV.assumptions;
-$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩每 30 m 一排、避開橫交道路，位置為推估；單柱或雙柱依街景與簡報現況照片分段判讀，段界並非逐排核對。<b>橋下現況</b>以全線每約 100 m 一點的街景判讀（共 35 點，各涵蓋前後最多 60 m）；延吉街以東有兩點無法取得路面影像，該段未判讀。街景拍攝於 2019–2025 年，現況可能已改變。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案設施的尺寸依規範數值試排，各說明卡列出依據與查證程度（已對照條文原文、僅部分查證、查無規範依據三級），位置仍是依政策文字推估，不是官方設計，也不能取代交通影響評估與專業簽證。`;
+$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩每 30 m 一排、避開橫交道路，位置為推估；單柱或雙柱依街景與簡報現況照片分段判讀，段界並非逐排核對。市民大道的橋體是把同方向路段串成連續折線後建模；匝道高度由主線與地面內插；人行道寬度取車道外緣到最近建物的距離（上限 5 m），不是實測；地下停車場車道的位置取自圖資，形式依街景，坡道未向下挖空，只以深色車道、矮牆與入口量體表示。<b>橋下現況</b>以全線每約 100 m 一點的街景判讀（共 35 點，各涵蓋前後最多 60 m）；延吉街以東有兩點無法取得路面影像，該段未判讀。街景拍攝於 2019–2025 年，現況可能已改變。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案設施的尺寸依規範數值試排，各說明卡列出依據與查證程度（已對照條文原文、僅部分查證、查無規範依據三級），位置仍是依政策文字推估，不是官方設計，也不能取代交通影響評估與專業簽證。`;
 
 // 量測
 let measuring = false, mpts = []; const MG = new THREE.Group(); scene.add(MG);

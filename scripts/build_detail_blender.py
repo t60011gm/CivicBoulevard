@@ -94,6 +94,8 @@ for Z in SC['zones']:
 
     dk, gd, pr, pp, nw = Buf(), Buf(), Buf(), Buf(), Buf()
     for r in d['viaduct']:
+        if r.get('x'):
+            continue          # 已由 corridor.py 重建
         W = r.get('W') or r['w']
         dk.ribbon(r['p'], W, 0, .35)
         gd.ribbon(r['p'], W * .55, -.35, GD - .35)
@@ -111,21 +113,6 @@ for Z in SC['zones']:
                            math.atan2(b[1] - a[1], b[0] - a[0]))
                 acc += 30
             acc -= seg
-    for l in d['det']['outer']:
-        pp.ribbon(l, .4, 1.0, 1.0)
-        nw.ribbon(l, .15, 3.2, 2.2)
-    for l in d['det']['inner']:
-        pp.ribbon(l, .4, .9, .9)
-    for q in d['det']['piers']:
-        x, y = q['p']
-        for o in ([-q['g'] / 2, q['g'] / 2] if q.get('g') else [0]):
-            cx, cy = x - math.sin(q['a']) * o, y + math.cos(q['a']) * o
-            if not q.get('r'):
-                pr.box(cx, cy, 2.4, 2.4 if q.get('g') else 3.2, 0, q['top'] - 1.8, q['a'])
-            else:
-                pr.prism([(cx + math.cos(i / 16 * math.tau) * 1.35, cy + math.sin(i / 16 * math.tau) * 1.35) for i in range(16)],
-                         0, q['top'] - 1.8)
-        pr.box(x, y, 2.8, q['cap'], q['top'] - 1.8, q['top'], q['a'])
     dk.make(zn + '_高架橋面板', 'deck', vc)
     gd.make(zn + '_高架箱型梁', 'girder', vc)
     pr.make(zn + '_橋墩與帽梁_街景估計', 'pier', vc)
@@ -164,5 +151,56 @@ for Z in SC['zones']:
         ex.make(nm + '_量體', 'car' if m['t'] == 'parking' else key, uc)
     print(zn, 'piers', len(d['det']['piers']), 'median', len(d['det']['median']))
 
+# ---------- 市民大道廊道（corridor.json）：連續橋體、匝道、車道、人行道、地下車道 ----------
+CO = json.load(open(BASE + '/web/data/corridor.json'))
+root = bpy.data.collections['市民大道_城市縫合']
+cc = bpy.data.collections.get('市民大道廊道_細部')
+if cc:
+    for o in list(cc.objects):
+        bpy.data.objects.remove(o, do_unlink=True)
+else:
+    cc = bpy.data.collections.new('市民大道廊道_細部')
+    root.children.link(cc)
+CM = {'deck': ('高架橋面', (.62, .64, .68)), 'girder': ('箱型梁', (.52, .54, .58)), 'parapet': ('護欄', (.70, .71, .74)),
+      'nwall': ('隔音牆', (.55, .75, .66)), 'rampfill': ('匝道引道', (.57, .59, .62)), 'pier': ('橋墩', (.45, .46, .49)),
+      'croad': ('平面車道', (.18, .19, .22)), 'mark': ('標線', (.93, .93, .93)), 'walk': ('人行道', (.77, .73, .65)),
+      'curb': ('緣石', (.58, .58, .56)), 'island': ('中央分隔島', (.70, .68, .63)), 'ugramp': ('地下車道', (.15, .16, .18)),
+      'ugwall': ('地下車道矮牆', (.55, .55, .53)), 'ugportal': ('地下車道入口', (.36, .29, .55)), 'kiosk': ('管制亭', (.85, .65, .05))}
+for k, (nm, col) in CM.items():
+    M['co_' + k] = mat('CB_廊道_' + nm, col, .5 if k == 'nwall' else 1.0)
+cb = {}
+for st in CO['strips']:
+    b = cb.setdefault(st['r'], Buf())
+    n, base = len(st['L']), len(b.v)
+    bot = (lambda q: 0.0) if st['t'] < 0 else (lambda q: q[2] - st['t'])
+    b.v += [tuple(q) for q in st['L']] + [tuple(q) for q in st['R']]
+    b.v += [(q[0], q[1], bot(q)) for q in st['L']] + [(q[0], q[1], bot(q)) for q in st['R']]
+    for i in range(n - 1):
+        b.f.append((base + i, base + n + i, base + n + i + 1, base + i + 1))
+        if st['t']:
+            c = base + 2 * n
+            b.f.append((c + i + 1, c + n + i + 1, c + n + i, c + i))
+            b.f.append((base + i + 1, c + i + 1, c + i, base + i))
+            b.f.append((base + n + i, c + n + i, c + n + i + 1, base + n + i + 1))
+for bx in CO['boxes']:
+    cb.setdefault(bx['r'], Buf()).box(bx['c'][0], bx['c'][1], bx['s'][0], bx['s'][1], bx['z'][0], bx['z'][1], bx['a'])
+pb = cb.setdefault('pier', Buf())
+for q in CO['piers']:
+    x, y = q['p']
+    for o in ([-q['g'] / 2, q['g'] / 2] if q.get('g') else [0]):
+        cx, cy = x - math.sin(q['a']) * o, y + math.cos(q['a']) * o
+        if not q.get('r'):
+            pb.box(cx, cy, 2.4, 2.4 if q.get('g') else 3.2, 0, q['top'] - 1.8, q['a'])
+        else:
+            pb.prism([(cx + math.cos(i / 16 * math.tau) * 1.35, cy + math.sin(i / 16 * math.tau) * 1.35) for i in range(16)], 0, q['top'] - 1.8)
+    pb.box(x, y, 2.8, q['cap'], q['top'] - 1.8, q['top'], q['a'])
+for k, b in cb.items():
+    b.make('市民大道_' + CM[k][0], 'co_' + k, cc)
+# 隱藏已被廊道取代的舊平面車道
+for o in bpy.data.objects:
+    if o.name.endswith('_市民大道平面車道'):
+        o.hide_viewport = True
+        o.hide_render = True
+print('corridor objects', len(cb))
 bpy.ops.wm.save_mainfile()
 print('saved', bpy.data.filepath)

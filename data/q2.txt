@@ -1,0 +1,9 @@
+[out:json][timeout:60][bbox:25.0435,121.5220,25.0485,121.5565];
+(
+  node["amenity"="parking_entrance"];
+  nwr["man_made"];
+  nwr["amenity"="parking"];
+  way["highway"]["tunnel"];
+  nwr["power"];
+);
+out body geom;

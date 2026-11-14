@@ -6,6 +6,7 @@
 - `CivicBoulevard_城市縫合_現況模型.blend`：Blender 模型（1 單位＝1 公尺，X 向東、Y 向北）
 - `scripts/preprocess.py`：OSM 圖資 → 公尺座標；假設值集中在檔案開頭
 - `scripts/build_blender.py`：在 Blender 內建立現況模型
+- `scripts/corridor.py`：市民大道廊道細部（連續橋體、匝道、平面車道、人行道、分隔島、地下停車場車道），在 preprocess.py 之後、make_overlay.py 之前執行
 - `scripts/make_overlay.py`：產生網站資料、提案示意量體與高架橋細部（街景判讀參數在此）
 - `scripts/proposals_design.py`：提案設施的規範數值與試排配置（由 make_overlay.py 載入）
 - `scripts/critique_check.py`：針對橋墩、不可移除設施、陸橋階梯三項批評，逐一量測所有提案（輸出 `web/data/critique.json`）

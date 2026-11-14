@@ -237,6 +237,38 @@ for Z in M['zones']:
     print(zn, 'piers', len(det['piers']), 'median obs', len(det['median']))
 
 # ---------- 現況（精簡欄位） ----------
+# 已由 corridor.py 重建的路段（市民大道主線、相連匝道、平面車道）在此標記 x=1，網站與 Blender 不再重複繪製
+_cor = json.load(open(os.path.join(OUT, 'corridor.json'))) if os.path.exists(os.path.join(OUT, 'corridor.json')) else {'centers': []}
+_cg = {}
+for _c in _cor['centers']:
+    for _i in range(len(_c) - 1):
+        _a, _b = _c[_i], _c[_i + 1]
+        for _gx in range(int(min(_a[0], _b[0]) // 30) - 1, int(max(_a[0], _b[0]) // 30) + 2):
+            for _gy in range(int(min(_a[1], _b[1]) // 30) - 1, int(max(_a[1], _b[1]) // 30) + 2):
+                _cg.setdefault((_gx, _gy), []).append((_a, _b))
+
+
+def _near_center(p, tol=3.0):
+    for a, b in _cg.get((int(p[0] // 30), int(p[1] // 30)), ()):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        L2 = dx * dx + dy * dy
+        t = 0 if L2 == 0 else max(0, min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2))
+        if math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy) < tol:
+            return True
+    return False
+
+
+def _hidden(cat, r):
+    if cat not in ('viaduct', 'road'):
+        return 0
+    civic = r['name'].startswith('市民大道') and '巷' not in r['name']
+    if not (r.get('hw') in ('trunk', 'trunk_link') or civic):
+        return 0
+    pts = r['pts']
+    probe = [pts[0], pts[len(pts) // 2], pts[-1]]
+    return 1 if all(_near_center(q) for q in probe) else 0
+
+
 S = {}
 for zn in D:
     d = D[zn]
@@ -248,7 +280,7 @@ for zn in D:
     }
     for cat in ('road', 'viaduct', 'footway', 'crossing', 'footbridge', 'cycleway', 'steps', 'rail_elevated'):
         S[zn][cat] = [{'p': r['pts'], 'w': r['w'], 'c': 1 if (r['name'].startswith('市民大道') and '巷' not in r['name']) else 0,
-                       't': 1 if r.get('hw') == 'trunk' else 0, 'W': real_w(r['w']) if cat == 'viaduct' else 0} for r in d.get(cat, [])]
+                       't': 1 if r.get('hw') == 'trunk' else 0, 'W': real_w(r['w']) if cat == 'viaduct' else 0, 'x': _hidden(cat, r)} for r in d.get(cat, [])]
 json.dump({'zones': M['zones'], 'data': S}, open(os.path.join(OUT, 'scene.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
 
 # 提案設施細部（依規範試排），並輸出 overlay.json
