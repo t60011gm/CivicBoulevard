@@ -66,6 +66,8 @@
   .spec td:last-child { font-weight: 600; white-space: normal; width: 38%; }
   .spec small { color: var(--sub); font-weight: 400; }
   .spec small.unv { color: #b26a00; }
+  .spec small.ver { color: #1a8a4a; }
+  .spec small.non { color: #c62828; }
   .foot { font-size: 11.5px; color: var(--sub); line-height: 1.6; background: var(--chip); border-radius: 8px; padding: 8px 10px; }
   #hint { position: fixed; left: 364px; bottom: 14px; font-size: 12px; color: var(--sub); background: #ffffffcc;
     padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); }
@@ -397,7 +399,7 @@ function select(id, doFly) {
     <h4>規範檢核（${p.checks.length - fails} 項符合、${fails} 項待解決）</h4>
     <ul class="chk">${p.checks.map(c => `<li class="${c[0] ? 'ok' : 'no'}">${c[1]}</li>`).join('')}</ul>
     <h4>採用的規範數值</h4>
-    <table class="spec">${p.specs.map(r => `<tr><td><b>${r[0]}</b><br><small>${r[2]}</small>${r[3] ? '' : '<br><small class="unv">未對照條文原文</small>'}</td><td>${r[1]}</td></tr>`).join('')}</table>
+    <table class="spec">${p.specs.map(r => `<tr><td><b>${r[0]}</b><br><small>${r[2]}</small>${r[3] === 1 ? '<br><small class="ver">已對照條文原文</small>' : r[3] === 2 ? '<br><small class="unv">僅部分查證</small>' : '<br><small class="non">查無規範依據，為本模型取值</small>'}</td><td>${r[1]}</td></tr>`).join('')}</table>
     <p style="color:var(--sub);font-size:12px">來源：${p.src}</p>`;
   $('#card').style.display = 'block'; $('#card').scrollTop = 0;
   if (doFly) flyTo(p.focus[0], p.focus[1], p.cat === '平面穿越' ? 90 : 170, .62, -.5);
@@ -416,7 +418,7 @@ for (const [k, name, col] of LAYERS) {
   layEl.appendChild(l);
 }
 const A = OV.assumptions;
-$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩為每 30 m 一支、避開橫交道路的推估位置。<b>橋下現況</b>只在 10 個街景抽樣點各標示前後 50 m，其餘路段未判讀。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案設施的尺寸依規範數值試排（各說明卡列出依據，標示「未對照條文原文」者須再查證），位置仍是依政策文字推估，不是官方設計，也不能取代交通影響評估與專業簽證。`;
+$('#foot').innerHTML = `平面位置來自 OpenStreetMap（© OpenStreetMap contributors）。<b>高架橋體</b>的斷面、橋墩形式與高度是比對街景照片估計的：低層段橋面約 ${A.DECK_H[1]} m、高層段約 ${A.DECK_H[2]} m、梁深約 ${GD} m，誤差約 ±1.5 m；橋墩為每 30 m 一支、避開橫交道路的推估位置。<b>橋下現況</b>只在 10 個街景抽樣點各標示前後 50 m，其餘路段未判讀。無資料建物一律 ${A.DEFAULT_LEVELS} 層（褐色），道路寬度由車道數估算，地下鐵路、捷運隧道與地下停車場未建模。提案設施的尺寸依規範數值試排，各說明卡列出依據與查證程度（已對照條文原文、僅部分查證、查無規範依據三級），位置仍是依政策文字推估，不是官方設計，也不能取代交通影響評估與專業簽證。`;
 
 // 量測
 let measuring = false, mpts = []; const MG = new THREE.Group(); scene.add(MG);
