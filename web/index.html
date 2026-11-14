@@ -35,6 +35,8 @@
   h2 { font-size: 12px; color: var(--sub); margin: 16px 0 6px; font-weight: 600; letter-spacing: .08em; }
   h2:first-child { margin-top: 0; }
   .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .seg.one { grid-template-columns: 1fr; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
   .zones { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   button { font: inherit; font-size: 13px; padding: 7px 6px; border: 1px solid var(--line); border-radius: 8px;
     background: var(--chip); color: var(--ink); cursor: pointer; }
@@ -110,6 +112,9 @@
     <div class="seg">
       <button id="mNow">僅現況</button>
       <button id="mProp" class="on">現況＋提案</button>
+    </div>
+    <div class="seg one" style="margin-top:6px">
+      <button id="probBtn" class="on" aria-pressed="true">衝突與問題標示：開</button>
     </div>
 
     <h2>示範區</h2>
@@ -485,7 +490,15 @@ function select(id, doFly) {
 }
 $('#cardX').onclick = () => select(null);
 let showProp = true;
-function setMode(v) { showProp = v; PG.visible = v; PG.traverse(o => { if (o.isCSS2DObject) o.visible = v; }); if (typeof FPG !== 'undefined') { FPG.visible = v && flowOn; FPG.traverse(o => { if (o.isCSS2DObject) o.visible = v && flowOn; }); } $('#mProp').classList.toggle('on', v); $('#mNow').classList.toggle('on', !v); if (!v) select(null); }
+var CFG, confOn = true;
+function syncConf() {
+  const b = $('#probBtn'); if (!b) return;
+  const v = showProp && confOn;
+  b.classList.toggle('on', v); b.setAttribute('aria-pressed', v); b.disabled = !showProp;
+  b.textContent = showProp ? '衝突與問題標示：' + (confOn ? '開' : '關') : '衝突與問題標示（需先顯示提案）';
+  if (CFG) { CFG.visible = v; CFG.traverse(o => { if (o.isCSS2DObject) o.visible = v; }); }
+}
+function setMode(v) { showProp = v; PG.visible = v; PG.traverse(o => { if (o.isCSS2DObject) o.visible = v; }); if (typeof FPG !== 'undefined') { FPG.visible = v && flowOn; FPG.traverse(o => { if (o.isCSS2DObject) o.visible = v && flowOn; }); } $('#mProp').classList.toggle('on', v); $('#mNow').classList.toggle('on', !v); if (!v) select(null); syncConf(); }
 $('#mNow').onclick = () => setMode(false); $('#mProp').onclick = () => setMode(true);
 
 const layEl = $('#layers');
@@ -623,6 +636,8 @@ for (const d of DK.items) {
 }
 // ---------- 車流與人流（示意動畫）與衝突標示 ----------
 const FG = new THREE.Group(), FPG = new THREE.Group(); scene.add(FG); scene.add(FPG);
+CFG = new THREE.Group(); scene.add(CFG);            // 衝突與問題標示（圓環、光柱、標籤），可獨立開關
+syncConf();
 const agents = [], rings = [];
 let flowOn = !matchMedia('(prefers-reduced-motion: reduce)').matches;
 function mkPath(pts) {
@@ -706,22 +721,24 @@ function fleet(group, geo, color, list) {           // list: [{path, s, v, loop,
   for (const c of FL.conflicts) {
     const r = c.small ? 2.2 : 9, h = c.small ? 9 : 26;
     const ring = new THREE.Mesh(new THREE.RingGeometry(r * .72, r, 28), new THREE.MeshBasicMaterial({ color: 0xff1744, side: THREE.DoubleSide, transparent: true, opacity: .9, depthTest: false }));
-    ring.rotation.x = -Math.PI / 2; ring.position.copy(V(c.p[0], c.p[1], .7)); ring.renderOrder = 5; FPG.add(ring); rings.push(ring);
+    ring.rotation.x = -Math.PI / 2; ring.position.copy(V(c.p[0], c.p[1], .7)); ring.renderOrder = 5; CFG.add(ring); rings.push(ring);
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(c.small ? .25 : .6, c.small ? .25 : .6, h, 8), new THREE.MeshBasicMaterial({ color: 0xff1744, transparent: true, opacity: .75 }));
-    beam.position.copy(V(c.p[0], c.p[1], h / 2)); FPG.add(beam);
-    if (!c.small) { const l = label('⚠ ' + c.t, c.p[0], c.p[1], h + 2, 'conf'); FPG.add(l); }
+    beam.position.copy(V(c.p[0], c.p[1], h / 2)); CFG.add(beam);
+    if (!c.small) { const l = label('⚠ ' + c.t, c.p[0], c.p[1], h + 2, 'conf'); CFG.add(l); }
   }
   for (const pid in byPid) {                       // 小衝突（橋柱）每個提案只標一張總結
     const sm = byPid[pid].filter(c => c.small && !c.clash), cl = byPid[pid].filter(c => c.clash);
     if (sm.length) { const c = sm[sm.length >> 1], rep = FL.col_report[pid];
-      FPG.add(label(`⚠ ${rep[1]} 支橋柱與電梯塔中有 ${rep[0]} 支落在車道上`, c.p[0], c.p[1], 14, 'conf')); }
+      CFG.add(label(`⚠ ${rep[1]} 支橋柱與電梯塔中有 ${rep[0]} 支落在車道上`, c.p[0], c.p[1], 14, 'conf')); }
     if (cl.length) { const c = cl[cl.length >> 1];
-      FPG.add(label(`⚠ 設施與 ${cl.length} 支現況橋柱重疊，位置須重排`, c.p[0], c.p[1], 11, 'conf')); }
+      CFG.add(label(`⚠ 設施與 ${cl.length} 支現況橋柱重疊，位置須重排`, c.p[0], c.p[1], 11, 'conf')); }
   }
   const big = FL.conflicts.filter(c => !c.small);
-  $('#flowNote').innerHTML = `<b>這是示意動畫，不是交通模擬</b>：沒有實際車流量與行人流量資料，車輛與行人的數量、速度是設定值，車輛不會停等號誌或禮讓行人。行人只在既有行穿線穿越車道；到不了的設施，行人會停在人行道上，設施內不放行人。<b>紅色標示的衝突</b>則來自量測檢查，共 ${big.length} 處動線衝突，另有 ${FL.conflicts.filter(c => c.small && !c.clash).length} 支提案橋柱或電梯塔落在車道上、${FL.conflicts.filter(c => c.clash).length} 支現況橋柱與提案設施重疊；切到「現況＋提案」才會顯示。現況橋墩已依街景重新校正：立柱都在橋面正下方的分隔帶內、橫梁不超出橋面；共 ${FL.pier_fix.ok + FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排，其中 ${FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排的柱位是為了避開估算的車道而橫移或縮小柱距，位置誤差較大。`;
+  $('#flowNote').innerHTML = `<b>這是示意動畫，不是交通模擬</b>：沒有實際車流量與行人流量資料，車輛與行人的數量、速度是設定值，車輛不會停等號誌或禮讓行人。行人只在既有行穿線穿越車道；到不了的設施，行人會停在人行道上，設施內不放行人。<b>紅色標示的衝突</b>則來自量測檢查，共 ${big.length} 處動線衝突，另有 ${FL.conflicts.filter(c => c.small && !c.clash).length} 支提案橋柱或電梯塔落在車道上、${FL.conflicts.filter(c => c.clash).length} 支現況橋柱與提案設施重疊；切到「現況＋提案」才會顯示，可用上方「衝突與問題標示」按鈕開關。現況橋墩已依街景重新校正：立柱都在橋面正下方的分隔帶內、橫梁不超出橋面；共 ${FL.pier_fix.ok + FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排，其中 ${FL.pier_fix.moved + FL.pier_fix.narrowed + (FL.pier_fix.eccentric || 0)} 排的柱位是為了避開估算的車道而橫移或縮小柱距，位置誤差較大。`;
   let ci = -1;
-  $('#confBtn').onclick = () => { if (!showProp) setMode(true); ci = (ci + 1) % big.length; const c = big[ci];
+  syncConf();
+  $('#probBtn').onclick = () => { confOn = !confOn; syncConf(); };
+  $('#confBtn').onclick = () => { confOn = true; if (!showProp) setMode(true); else syncConf(); ci = (ci + 1) % big.length; const c = big[ci];
     flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confBtn').textContent = `衝突 ${ci + 1}/${big.length}：下一處`; };
   $('#flowBtn').onclick = () => { flowOn = !flowOn; $('#flowBtn').classList.toggle('on', flowOn); $('#flowBtn').textContent = '動畫：' + (flowOn ? '開' : '關'); FG.visible = flowOn; FPG.visible = flowOn && showProp; FPG.traverse(o => { if (o.isCSS2DObject) o.visible = flowOn && showProp; }); };
   if (!flowOn) { $('#flowBtn').classList.remove('on'); $('#flowBtn').textContent = '動畫：關'; FG.visible = false; }
