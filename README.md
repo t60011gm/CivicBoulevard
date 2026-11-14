@@ -8,6 +8,7 @@
 - `scripts/build_blender.py`：在 Blender 內建立現況模型
 - `scripts/make_overlay.py`：產生網站資料、提案示意量體與高架橋細部（街景判讀參數在此）
 - `scripts/proposals_design.py`：提案設施的規範數值與試排配置（由 make_overlay.py 載入）
+- `scripts/critique_check.py`：針對橋墩、不可移除設施、陸橋階梯三項批評，逐一量測所有提案（輸出 `web/data/critique.json`）
 - `scripts/build_detail_blender.py`：在 Blender 內重建高架橋體與橋下現況
 - `scripts/build_proposals_blender.py`：在 Blender 內重建提案設施
 - `data/`：原始 OSM 圖資與轉換結果

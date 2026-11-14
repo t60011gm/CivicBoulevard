@@ -1,0 +1,294 @@
+{
+ "under": [
+  {
+   "id": "a2",
+   "title": "運動驛站",
+   "zone": "A_華山",
+   "L": 80,
+   "piers": 3,
+   "fixed": {
+    "地下停車場出入口或車道": 55
+   },
+   "movable": {
+    "植栽綠帶": 26
+   },
+   "unsurveyed": 0,
+   "free_total": 21,
+   "free_nopier": 26,
+   "longest": 21,
+   "mode": "clear",
+   "need": 19,
+   "why": "一座 3x3 球場加兩端緩衝，或兩張桌球桌",
+   "width_fail": false,
+   "verdict": "大幅縮水"
+  },
+  {
+   "id": "a3",
+   "title": "兒童遊戲場",
+   "zone": "A_華山",
+   "L": 79,
+   "piers": 3,
+   "fixed": {
+    "地下停車場出入口或車道": 49
+   },
+   "movable": {
+    "迴轉道與綠帶": 0
+   },
+   "unsurveyed": 30,
+   "free_total": 22,
+   "free_nopier": 0,
+   "longest": 11,
+   "mode": "clear",
+   "need": 12,
+   "why": "一組遊具加使用區",
+   "width_fail": false,
+   "verdict": "放不下"
+  },
+  {
+   "id": "a4",
+   "title": "寵物友善空間",
+   "zone": "A_華山",
+   "L": 73,
+   "piers": 3,
+   "fixed": {},
+   "movable": {
+    "迴轉道與綠帶": 73
+   },
+   "unsurveyed": 0,
+   "free_total": 51,
+   "free_nopier": 73,
+   "longest": 22,
+   "mode": "area",
+   "need": 24,
+   "why": "300 m² 最小狗活動區",
+   "width_fail": false,
+   "verdict": "可容納，須協調"
+  },
+  {
+   "id": "a5",
+   "title": "動漫廊道（往三創、光華）",
+   "zone": "A_華山",
+   "L": 189,
+   "piers": 5,
+   "fixed": {},
+   "movable": {
+    "植栽綠帶": 189
+   },
+   "unsurveyed": 0,
+   "free_total": 151,
+   "free_nopier": 189,
+   "longest": 46,
+   "mode": "walk",
+   "need": null,
+   "why": "步道須全線連續",
+   "width_fail": false,
+   "verdict": "可容納，須協調"
+  },
+  {
+   "id": "b1a",
+   "title": "藝文廊道・西段（啤酒廠側）",
+   "zone": "B_市民八德",
+   "L": 40,
+   "piers": 1,
+   "fixed": {
+    "路口（無分隔帶）": 10
+   },
+   "movable": {
+    "收費停車場": 30
+   },
+   "unsurveyed": 0,
+   "free_total": 22,
+   "free_nopier": 30,
+   "longest": 11,
+   "mode": "walk",
+   "need": null,
+   "why": "步道須全線連續",
+   "width_fail": true,
+   "verdict": "放不下"
+  },
+  {
+   "id": "b1b",
+   "title": "藝文廊道・東段（忠泰側）",
+   "zone": "B_市民八德",
+   "L": 68,
+   "piers": 3,
+   "fixed": {
+    "匝道引道": 67
+   },
+   "movable": {},
+   "unsurveyed": 1,
+   "free_total": 1,
+   "free_nopier": 0,
+   "longest": 1,
+   "mode": "walk",
+   "need": null,
+   "why": "步道須全線連續",
+   "width_fail": false,
+   "verdict": "放不下"
+  },
+  {
+   "id": "c1",
+   "title": "可撤收夜間市集",
+   "zone": "C_市民敦化",
+   "L": 240,
+   "piers": 8,
+   "fixed": {
+    "路口（無分隔帶）": 120
+   },
+   "movable": {
+    "迴轉道與綠帶": 100,
+    "收費停車場": 20
+   },
+   "unsurveyed": 0,
+   "free_total": 89,
+   "free_nopier": 120,
+   "longest": 22,
+   "mode": "area",
+   "need": 30,
+   "why": "十個攤位加通道",
+   "width_fail": false,
+   "verdict": "大幅縮水"
+  },
+  {
+   "id": "c2",
+   "title": "音樂廣場",
+   "zone": "C_市民敦化",
+   "L": 57,
+   "piers": 2,
+   "fixed": {},
+   "movable": {
+    "鋪面小廣場": 57
+   },
+   "unsurveyed": 0,
+   "free_total": 42,
+   "free_nopier": 57,
+   "longest": 22,
+   "mode": "clear",
+   "need": 15,
+   "why": "舞臺加前排觀眾區",
+   "width_fail": false,
+   "verdict": "可容納，須協調"
+  },
+  {
+   "id": "c3",
+   "title": "小型展演空間",
+   "zone": "C_市民敦化",
+   "L": 99,
+   "piers": 3,
+   "fixed": {
+    "地下停車場出入口或車道": 99
+   },
+   "movable": {},
+   "unsurveyed": 0,
+   "free_total": 0,
+   "free_nopier": 0,
+   "longest": 0,
+   "mode": "clear",
+   "need": 15,
+   "why": "舞臺加四排座位",
+   "width_fail": false,
+   "verdict": "放不下"
+  }
+ ],
+ "bridges": [
+  {
+   "id": "a1",
+   "title": "人行陸橋：華山公園 ↔ 中央藝文公園",
+   "deck_len": 120,
+   "t_bridge": 169,
+   "ends": [
+    {
+     "in_building": 0,
+     "in_road": 0,
+     "n": 10,
+     "gap": 41.0,
+     "left": 39.0,
+     "d_road": 27.1,
+     "d_bld": 13.9
+    },
+    {
+     "in_building": 0,
+     "in_road": 0,
+     "n": 10,
+     "gap": 99.1,
+     "left": 97.1,
+     "d_road": 41.5,
+     "d_bld": 57.5
+    }
+   ],
+   "line": {
+    "n": 13,
+    "over_road": 2,
+    "over_bld": 0,
+    "gap_min": 39.7,
+    "gap_med": 65.8
+   }
+  },
+  {
+   "id": "b5",
+   "title": "懷生國小人行陸橋優化",
+   "deck_len": 50,
+   "t_bridge": 99,
+   "ends": [
+    {
+     "in_building": 0,
+     "in_road": 0,
+     "n": 10,
+     "gap": 9.1,
+     "left": 7.1,
+     "d_road": 4.7,
+     "d_bld": 4.4
+    },
+    {
+     "in_building": 0,
+     "in_road": 5,
+     "n": 10,
+     "gap": 10.8,
+     "left": 8.8,
+     "d_road": -1.3,
+     "d_bld": 10.8
+    }
+   ],
+   "line": {
+    "n": 5,
+    "over_road": 1,
+    "over_bld": 0,
+    "gap_min": 19.6,
+    "gap_med": 34.5
+   }
+  },
+  {
+   "id": "c4",
+   "title": "人行陸橋評估：181 巷 ↔ 延吉街",
+   "deck_len": 223,
+   "t_bridge": 272,
+   "ends": [
+    {
+     "in_building": 0,
+     "in_road": 0,
+     "n": 10,
+     "gap": 20.8,
+     "left": 18.8,
+     "d_road": 2.4,
+     "d_bld": 18.4
+    },
+    {
+     "in_building": 0,
+     "in_road": 9,
+     "n": 10,
+     "gap": 22.8,
+     "left": 20.8,
+     "d_road": 0.1,
+     "d_bld": 22.7
+    }
+   ],
+   "line": {
+    "n": 19,
+    "over_road": 14,
+    "over_bld": 0,
+    "gap_min": 10.1,
+    "gap_med": 13.8
+   }
+  }
+ ]
+}
