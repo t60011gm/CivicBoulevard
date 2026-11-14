@@ -21,6 +21,9 @@
   .lbl.zone { background: #b3261e; color: #fff; border: none; font-size: 14px; font-weight: 700; padding: 3px 9px; }
   .lbl.under { background: #3a4656; color: #fff; border: none; }
   .lbl.deck { color: #fff; border: none; font-weight: 700; cursor: default; }
+  .lbl.conf { background: #d50000; color: #fff; border: 2px solid #fff; font-weight: 700; font-size: 12px; box-shadow: 0 0 0 2px #d50000; animation: confp 1s ease-in-out infinite alternate; }
+  @keyframes confp { from { opacity: 1; } to { opacity: .55; } }
+  @media (prefers-reduced-motion: reduce) { .lbl.conf { animation: none; } }
   .lbl.meas { background: #111; color: #fff; border: none; font-size: 13px; font-weight: 600; }
   #panel { position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 340px; background: var(--panel);
     border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column;
@@ -118,6 +121,19 @@
     <h2>提案項目（點選可飛到該處）</h2>
     <div class="plist" id="plist"></div>
 
+    <h2>車流與人流（示意動畫）</h2>
+    <div class="seg">
+      <button id="flowBtn" class="on">動畫：開</button>
+      <button id="confBtn">逐一檢視衝突</button>
+    </div>
+    <div class="legend">
+      <span><i class="sw" style="background:#f4f4f4;border:1px solid #0003"></i>車輛</span>
+      <span><i class="sw" style="background:#1565c0"></i>現況行人</span>
+      <span><i class="sw" style="background:#00a36c"></i>提案新增行人</span>
+      <span><i class="sw" style="background:#e5341f"></i>有衝突的行人動線</span>
+    </div>
+    <div class="foot" id="flowNote" style="margin-top:8px"></div>
+
     <h2>四項批評檢查</h2>
     <div class="seg">
       <button id="feas">依可行性上色</button>
@@ -154,7 +170,7 @@ import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/exampl
 import { CSS2DRenderer, CSS2DObject } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js/+esm';
 
 const $ = s => document.querySelector(s);
-const [SC, OV, CQ, DK, CO] = await Promise.all(['scene', 'overlay', 'critique', 'deck', 'corridor'].map(f => fetch('data/' + f + '.json').then(r => r.json())));
+const [SC, OV, CQ, DK, CO, FL] = await Promise.all(['scene', 'overlay', 'critique', 'deck', 'corridor', 'flows'].map(f => fetch('data/' + f + '.json').then(r => r.json())));
 const CR = CQ.by, FCOL = [0xd32f2f, 0xf59e0b, 0x2e9e5b, 0x9aa3ad], FHEX = ['#d32f2f', '#f59e0b', '#2e9e5b', '#9aa3ad'];
 const worst = p => p.id.startsWith('c5_') ? CR['c5_0'] : CR[p.id];
 
@@ -468,7 +484,7 @@ function select(id, doFly) {
 }
 $('#cardX').onclick = () => select(null);
 let showProp = true;
-function setMode(v) { showProp = v; PG.visible = v; PG.traverse(o => { if (o.isCSS2DObject) o.visible = v; }); $('#mProp').classList.toggle('on', v); $('#mNow').classList.toggle('on', !v); if (!v) select(null); }
+function setMode(v) { showProp = v; PG.visible = v; PG.traverse(o => { if (o.isCSS2DObject) o.visible = v; }); if (typeof FPG !== 'undefined') { FPG.visible = v && flowOn; FPG.traverse(o => { if (o.isCSS2DObject) o.visible = v && flowOn; }); } $('#mProp').classList.toggle('on', v); $('#mNow').classList.toggle('on', !v); if (!v) select(null); }
 $('#mNow').onclick = () => setMode(false); $('#mProp').onclick = () => setMode(true);
 
 const layEl = $('#layers');
@@ -604,7 +620,91 @@ for (const d of DK.items) {
   b.innerHTML = `<span class="dot" style="background:${FHEX[d.level]}"></span><span>P${d.page}　${d.title}</span><small>${d.zone.split(' ')[1]}</small>`;
   b.onclick = () => selectDeck(d.page); $('#dlist').appendChild(b);
 }
-window.__app = { setFeas, selectDeck,  camera, controls, select, setZone, setMode, OV, view(p, t) { fly = null; camera.position.copy(V(...p)); controls.target.copy(V(...t)); controls.update(); } };
+// ---------- 車流與人流（示意動畫）與衝突標示 ----------
+const FG = new THREE.Group(), FPG = new THREE.Group(); scene.add(FG); scene.add(FPG);
+const agents = [], rings = [];
+let flowOn = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+function mkPath(pts) {
+  const P = pts.map(p => V(p[0], p[1], p[2] || 0)), cum = [0];
+  for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + P[i].distanceTo(P[i - 1]));
+  return { P, cum, len: cum[cum.length - 1] };
+}
+function posAt(path, s, out) {
+  let i = path._i || 0; const c = path.cum;
+  if (s < c[i]) i = 0;
+  while (i < c.length - 2 && c[i + 1] < s) i++;
+  path._i = i;
+  const f = (s - c[i]) / ((c[i + 1] - c[i]) || 1);
+  out.lerpVectors(path.P[i], path.P[i + 1], Math.min(1, Math.max(0, f)));
+  return Math.atan2(path.P[i + 1].x - path.P[i].x, path.P[i + 1].z - path.P[i].z);
+}
+function fleet(group, geo, color, list) {           // list: [{path, s, v, loop}]
+  if (!list.length) return;
+  const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color, roughness: .6 }), list.length);
+  m.frustumCulled = false; group.add(m);
+  agents.push({ m, list });
+}
+{
+  const car = new THREE.BoxGeometry(1.8, 1.4, 4.4); car.translate(0, .9, 0);
+  const man = new THREE.BoxGeometry(.9, 1.7, .9); man.translate(0, .85, 0);
+  const cars = [], pedsNow = [], pedsOk = [], pedsBad = [];
+  for (const v of FL.veh) {
+    const path = mkPath(v.pts), gap = v.k === 'deck' ? 55 : 38, sp = v.k === 'deck' ? 13 : 8;
+    for (let s = Math.random() * gap; s < path.len; s += gap * (.6 + Math.random() * .8))
+      cars.push({ path: { ...path }, s, v: sp * (.85 + Math.random() * .3), loop: 0, y: v.k === 'deck' ? .35 : 0 });
+  }
+  const addPeds = (arr, f, n) => { const path = mkPath(f.pts); if (path.len < 2) return;
+    const k = n ?? Math.max(2, Math.round(path.len / 28));
+    for (let i = 0; i < k; i++) arr.push({ path: { ...path }, s: Math.random() * path.len, v: (Math.random() < .5 ? 1 : -1) * (1.1 + Math.random() * .4), loop: 1, y: 0 }); };
+  for (const f of FL.ped_now) addPeds(pedsNow, f, f.n);
+  for (const f of FL.ped_prop) addPeds(f.bad ? pedsBad : pedsOk, f, f.n);
+  fleet(FG, car, 0xf4f4f4, cars); fleet(FG, man, 0x1565c0, pedsNow);
+  fleet(FPG, man, 0x00a36c, pedsOk); fleet(FPG, man, 0xe5341f, pedsBad);
+  // 衝突標示：紅色光柱＋脈動圓環＋標籤
+  const byPid = {};
+  for (const c of FL.conflicts) (byPid[c.pid] ??= []).push(c);
+  for (const c of FL.conflicts) {
+    const r = c.small ? 2.2 : 9, h = c.small ? 9 : 26;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(r * .72, r, 28), new THREE.MeshBasicMaterial({ color: 0xff1744, side: THREE.DoubleSide, transparent: true, opacity: .9, depthTest: false }));
+    ring.rotation.x = -Math.PI / 2; ring.position.copy(V(c.p[0], c.p[1], .7)); ring.renderOrder = 5; FPG.add(ring); rings.push(ring);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(c.small ? .25 : .6, c.small ? .25 : .6, h, 8), new THREE.MeshBasicMaterial({ color: 0xff1744, transparent: true, opacity: .75 }));
+    beam.position.copy(V(c.p[0], c.p[1], h / 2)); FPG.add(beam);
+    if (!c.small) { const l = label('⚠ ' + c.t, c.p[0], c.p[1], h + 2, 'conf'); FPG.add(l); }
+  }
+  for (const pid in byPid) {                       // 小衝突（橋柱）每個提案只標一張總結
+    const sm = byPid[pid].filter(c => c.small); if (!sm.length) continue;
+    const c = sm[sm.length >> 1], rep = FL.col_report[pid];
+    FPG.add(label(`⚠ ${rep[1]} 支橋柱與電梯塔中有 ${rep[0]} 支落在車道上`, c.p[0], c.p[1], 14, 'conf'));
+  }
+  const big = FL.conflicts.filter(c => !c.small);
+  $('#flowNote').innerHTML = `<b>這是示意動畫，不是交通模擬</b>：沒有實際車流量與行人流量資料，車輛與行人的數量、速度是設定值，車輛也不會停等號誌或禮讓行人。<b>紅色標示的衝突</b>則來自量測檢查，共 ${big.length} 處動線衝突，另有 ${FL.conflicts.length - big.length} 支提案橋柱或電梯塔落在車道上；切到「現況＋提案」才會顯示。模型的現況橋墩原有 ${FL.pier_fix.moved} 排壓到車道，已修正到分隔帶。`;
+  let ci = -1;
+  $('#confBtn').onclick = () => { if (!showProp) setMode(true); ci = (ci + 1) % big.length; const c = big[ci];
+    flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confBtn').textContent = `衝突 ${ci + 1}/${big.length}：下一處`; };
+  $('#flowBtn').onclick = () => { flowOn = !flowOn; $('#flowBtn').classList.toggle('on', flowOn); $('#flowBtn').textContent = '動畫：' + (flowOn ? '開' : '關'); FG.visible = flowOn; FPG.visible = flowOn && showProp; FPG.traverse(o => { if (o.isCSS2DObject) o.visible = flowOn && showProp; }); };
+  if (!flowOn) { $('#flowBtn').classList.remove('on'); $('#flowBtn').textContent = '動畫：關'; FG.visible = false; }
+}
+const _dm = new THREE.Object3D(), _dp = new THREE.Vector3();
+let _lt = performance.now();
+function stepFlows() {
+  const now = performance.now(), dt = Math.min(.1, (now - _lt) / 1000); _lt = now;
+  if (!flowOn) return;
+  for (const a of agents) {
+    if (!a.m.parent.visible) continue;
+    for (let i = 0; i < a.list.length; i++) {
+      const g = a.list[i]; g.s += g.v * dt;
+      if (g.loop) { if (g.s > g.path.len) { g.s = g.path.len; g.v = -g.v; } else if (g.s < 0) { g.s = 0; g.v = -g.v; } }
+      else if (g.s > g.path.len) g.s -= g.path.len;
+      const yaw = posAt(g.path, g.s, _dp);
+      _dm.position.set(_dp.x, _dp.y + g.y, _dp.z); _dm.rotation.set(0, g.v < 0 ? yaw + Math.PI : yaw, 0); _dm.updateMatrix();
+      a.m.setMatrixAt(i, _dm.matrix);
+    }
+    a.m.instanceMatrix.needsUpdate = true;
+  }
+  const k = 1 + .25 * Math.sin(now / 220);
+  for (const r of rings) r.scale.set(k, k, 1);
+}
+window.__app = { setFeas, selectDeck, FL,  camera, controls, select, setZone, setMode, OV, view(p, t) { fly = null; camera.position.copy(V(...p)); controls.target.copy(V(...t)); controls.update(); } };
 
 (function loop() {
   requestAnimationFrame(loop);
@@ -613,6 +713,7 @@ window.__app = { setFeas, selectDeck,  camera, controls, select, setZone, setMod
     camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.t0, fly.t1, e);
     if (fly.k >= 1) fly = null;
   }
+  stepFlows();
   controls.update();
   const dist = camera.position.distanceTo(controls.target);
   if (G.under.visible) for (const o of underLabels) o.visible = dist < 650;

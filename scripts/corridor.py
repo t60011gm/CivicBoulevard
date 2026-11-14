@@ -445,6 +445,7 @@ for q, ci in ALLS:
     SG[int(q['x'] // 30)].append((q, ci))
 
 n_walk = 0
+wpaths = []
 for ci, ch in enumerate(SURF):
     add_strip([off(q, q['w'] / 2, .17) for q in ch], [off(q, -q['w'] / 2, .17) for q in ch], .17, 'croad')
     if ch[0]['link']:
@@ -468,6 +469,7 @@ for ci, ch in enumerate(SURF):
         q['sw'] = 0.0 if on_cross(e[:2], 1.0) else max(0.0, min(db - .3, 5.0))
     for rn in runs(ch, lambda q: q['sw'] >= 1.2):
         add_strip([off(q, q['out'] * q['w'] / 2, .32) for q in rn], [off(q, q['out'] * (q['w'] / 2 + q['sw']), .32) for q in rn], .32, 'walk')
+        wpaths.append([[R2(v) for v in off(q, q['out'] * (q['w'] / 2 + q['sw'] / 2), .35)] for q in rn])
         add_strip([off(q, q['out'] * q['w'] / 2, .34) for q in rn], [off(q, q['out'] * (q['w'] / 2 + .2), .34) for q in rn], .04, 'curb')
         n_walk += 1
     # 分隔島：只由往東的車道負責畫，避免重複
@@ -493,6 +495,67 @@ for ci, ch in enumerate(SURF):
     for rn in runs(ch, lambda q: q.get('isl') is not None):
         add_strip([q['isl'][0] for q in rn], [q['isl'][1] for q in rn], .26, 'island')
         isl.append(rn)
+
+# =====================================================================
+# 3b. 橋墩位置修正：推估的橋墩若落在車道範圍，沿橫向移到最近的非車道位置（改單柱）；移不開的就不畫
+# =====================================================================
+LG = collections.defaultdict(list)
+def _lane_add(pts, hw):
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        n = max(1, int(math.dist(a[:2], b[:2]) // 1.25))
+        for k in range(n + 1):
+            x, y = a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n
+            LG[(int(x // 10), int(y // 10))].append((x, y, hw))
+for ch in SURF:
+    _lane_add([(q['x'], q['y']) for q in ch], ch[0]['w'] / 2)
+for w in sel.values():
+    if not isbr(w['tags']):
+        _lane_add(w['pts'], ((fnum(w['tags'].get('lanes'), 1) or 1) * 3.5 + 1.5) / 2)
+
+
+def lane_hit(x, y, r):
+    gx, gy = int(x // 10), int(y // 10)
+    for ix in (gx - 1, gx, gx + 1):
+        for iy in (gy - 1, gy, gy + 1):
+            for lx, ly, hw in LG.get((ix, iy), ()):
+                if math.hypot(lx - x, ly - y) < hw + r:
+                    return True
+    return on_cross((x, y), r - .5)
+
+
+def cols_of(q):
+    x, y = q['p']
+    return [(x - math.sin(q['a']) * o, y + math.cos(q['a']) * o) for o in ([-q['g'] / 2, q['g'] / 2] if q['g'] else [0])]
+
+
+pier_fix = {'ok': 0, 'moved': 0, 'dropped': 0}
+kept = []
+for q in piers:
+    if not any(lane_hit(cx, cy, 1.5) for cx, cy in cols_of(q)):
+        pier_fix['ok'] += 1
+        kept.append(q)
+        continue
+    x, y = q['p']
+    done = False
+    for k in range(1, 27):
+        for sgn in (1, -1):
+            d = sgn * k * .5
+            nx, ny = x - math.sin(q['a']) * d, y + math.cos(q['a']) * d
+            if not lane_hit(nx, ny, 1.5):
+                q['cap'] = R2(q['cap'] + 2 * abs(d))
+                q['p'], q['g'], done = [R2(nx), R2(ny)], 0, True
+                break
+        if done:
+            break
+    pier_fix['moved' if done else 'dropped'] += 1
+    if done:
+        kept.append(q)
+piers = kept
+nb = len(boxes)
+boxes = [b for b in boxes if not (b['r'] == 'pier' and lane_hit(b['c'][0], b['c'][1], .9))]
+pier_fix['ramp_piers_dropped'] = nb - len(boxes)
+print('pier fix', pier_fix)
 
 # =====================================================================
 # 4. 地下停車場車道
@@ -539,7 +602,10 @@ for x, typ, L_, W_, H_, note, conf in VENTS:
             add_box(x, y, L_ * .8, W_ + .16, H_ * .55, H_ * .88, a, 'louver')
     vents.append({'p': [R2(x), R2(y), R2(H_ + 2)], 't': note, 'conf': conf})
 
+vpaths = [{'k': 'deck', 'pts': [[R2(q['x']), R2(q['y']), R2(q['z'])] for q in ch]} for ch in MAIN]
+vpaths += [{'k': 'surf', 'w': ch[0]['w'], 'pts': [[R2(q['x']), R2(q['y']), 0.2] for q in ch]} for ch in SURF if not ch[0]['link']]
 json.dump({'strips': strips, 'boxes': boxes, 'piers': piers, 'centers': centers, 'girder': GD, 'vents': vents,
+           'vpaths': vpaths, 'wpaths': wpaths, 'pier_fix': pier_fix,
            'ug': [{'x': x, 'dir': d} for x, d in UG_ENT]},
           open(os.path.join(BASE, 'web/data/corridor.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
 by = collections.Counter(s['r'] for s in strips)

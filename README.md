@@ -10,6 +10,7 @@
 - `scripts/make_overlay.py`：產生網站資料、提案示意量體與高架橋細部（街景判讀參數在此）
 - `scripts/proposals_design.py`：提案設施的規範數值與試排配置（由 make_overlay.py 載入）
 - `scripts/critique_check.py`：針對橋墩、不可移除設施、陸橋階梯三項批評，逐一量測所有提案（輸出 `web/data/critique.json`）
+- `scripts/flows.py`：車流與人流的示意動線，以及提案造成的動線衝突點（輸出 `web/data/flows.json`；無實際交通量資料，數量與速度為設定值）
 - `scripts/deck_review.py`：簡報模擬圖逐頁核對結果（輸出 `web/data/deck.json`；不含簡報圖片）
 - `scripts/build_detail_blender.py`：在 Blender 內重建高架橋體與橋下現況
 - `scripts/build_proposals_blender.py`：在 Blender 內重建提案設施
