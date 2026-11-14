@@ -136,9 +136,10 @@
     <div class="plist" id="plist"></div>
 
     <h2>車流與人流（示意動畫）</h2>
-    <div class="seg">
-      <button id="flowBtn" class="on">動畫：開</button>
-      <button id="confBtn">逐一檢視衝突</button>
+    <div class="seg" style="grid-template-columns: auto 1fr 1.5fr">
+      <button id="flowBtn" class="on" style="padding-left:8px;padding-right:8px;white-space:nowrap">動畫：開</button>
+      <button id="confPrev" style="white-space:nowrap" aria-label="上一處衝突">◀ 上一處</button>
+      <button id="confBtn" style="white-space:nowrap">逐一檢視衝突 ▶</button>
     </div>
     <div class="legend">
       <span><i class="sw" style="background:#f4f4f4;border:1px solid #0003"></i>車輛（小客車、貨車、公車、機車）</span>
@@ -785,9 +786,12 @@ function fleet(group, geo, color, list) {           // list: [{path, s, v, loop,
   syncConf();
   $('#cpopX').onclick = () => openConf(null);
   $('#probBtn').onclick = () => { confOn = !confOn; syncConf(); };
-  $('#confBtn').onclick = () => { confOn = true; if (!showProp) setMode(true); else syncConf(); ci = (ci + 1) % big.length; const c = big[ci];
-    flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confBtn').textContent = `衝突 ${ci + 1}/${big.length}：下一處`;
+  const stepConf = d => { confOn = true; if (!showProp) setMode(true); else syncConf();
+    ci = ci < 0 ? (d > 0 ? 0 : big.length - 1) : (ci + d + big.length) % big.length; const c = big[ci];
+    flyTo(c.p[0], c.p[1], 130, .6, -.5); $('#confBtn').textContent = `下一處 ▶（${ci + 1}/${big.length}）`;
     openConf(c._l || null); };
+  $('#confBtn').onclick = () => stepConf(1);
+  $('#confPrev').onclick = () => stepConf(-1);
   $('#flowBtn').onclick = () => { flowOn = !flowOn; $('#flowBtn').classList.toggle('on', flowOn); $('#flowBtn').textContent = '動畫：' + (flowOn ? '開' : '關'); FG.visible = flowOn; FPG.visible = flowOn && showProp; FPG.traverse(o => { if (o.isCSS2DObject) o.visible = flowOn && showProp; }); };
   if (!flowOn) { $('#flowBtn').classList.remove('on'); $('#flowBtn').textContent = '動畫：關'; FG.visible = false; }
 }
