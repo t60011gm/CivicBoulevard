@@ -154,7 +154,10 @@ def under_site(pid, zone, title, x0, x1, desc, build, src=None):
         U = max(U2, 1.0)
     sl, npier = slots(x0, x1)
     if npier:
-        checks.append([1, '範圍內有 %d 排橋墩（街景校正柱形、每 30 m 一排的推估位置），設施已避開橋墩前後各 2.5 m' % npier])
+        _sv = os.path.join(BASE, 'data/survey/piers_surveyed.json')
+        _rg = json.load(open(_sv))['range'] if os.path.exists(_sv) else None
+        _src = '街景逐墩判讀、多點交會的位置' if _rg and _rg[0] <= (x0 + x1) / 2 <= _rg[1] else '街景校正柱形、每 30 m 一排的推估位置'
+        checks.append([1, '範圍內有 %d 排橋墩（%s），設施已避開橋墩前後各 2.5 m' % (npier, _src)])
     specs, summary = build(x0, x1, U, sl, parts, checks)
     access_check(x0, x1, checks)
     kw = {'src': src} if src else {}
