@@ -584,31 +584,37 @@ for q in piers:
 # 3c. 街景逐墩判讀結果：試驗路段以實測柱位取代每 30 m 的推估柱位
 SV = os.path.join(BASE, 'data/survey/piers_surveyed.json')
 if os.path.exists(SV):
-    sv = json.load(open(SV))
-    x0, x1 = sv['range']
-    keep = lambda q: any(math.dist(q['p'], k) < 1.0 for k in sv['keep_near'])
-    old = [q for q in piers if x0 <= q['p'][0] <= x1 and not keep(q)]
-    piers = [q for q in piers if not (x0 <= q['p'][0] <= x1) or keep(q)]
-    for c in sv['cols']:
-        ref = min(old, key=lambda q: math.dist(q['p'], c['p']))
-        w = 2.5 if c['row'] == 'S' else 2.0
-        if lane_hit(c['p'][0], c['p'][1], 1.3):
-            # 模型車道線本身是推估；兩點交會或推估的柱（sv=2）橫向微調到車道外，三點以上交會的維持實測並標記
-            hit = True
-            if c['sv'] == 2:
-                for k in range(1, 9):
-                    for sgn in (1, -1):
-                        d = sgn * k * .5
-                        nx, ny = c['p'][0] - math.sin(sv['a']) * d, c['p'][1] + math.cos(sv['a']) * d
-                        if hit and not lane_hit(nx, ny, 1.3):
-                            c = dict(c, p=[R2(nx), R2(ny)], moved=d)
-                            hit = False
-            print(' surveyed', c['id'], 'lane hit', 'kept' if hit else 'moved %.1f m' % c['moved'])
-            pier_fix['surveyed_lane'] = pier_fix.get('surveyed_lane', 0) + (1 if hit else 0)
-        piers.append({'p': c['p'], 'a': sv['a'], 'top': ref['top'], 'r': 0, 'g': 0, 'ext': ref['ext'], 'offs': [0.0],
-                      'cs': sv['cs'][c['row']], 'cap': [-w, w], 'sv': c['sv'], 'id': c['id']})
-    pier_fix['surveyed'] = len(sv['cols'])
-    pier_fix['surveyed_replaced'] = len(old)
+    n_cols = n_old = 0
+    sv_ranges = []
+    for sv in json.load(open(SV))['sections']:
+        x0, x1 = sv['range']
+        sv_ranges.append([x0, x1])
+        keep = lambda q: any(math.dist(q['p'], k) < 1.0 for k in sv['keep_near'])
+        old = [q for q in piers if x0 <= q['p'][0] <= x1 and not keep(q) and not q.get('sv')]
+        piers = [q for q in piers if not (x0 <= q['p'][0] <= x1) or keep(q) or q.get('sv')]
+        for c in sv['cols']:
+            ref = min(old, key=lambda q: math.dist(q['p'], c['p']))
+            w = 2.5 if c['row'] == 'S' else 2.0
+            if lane_hit(c['p'][0], c['p'][1], 1.3):
+                # 模型車道線本身是推估；兩點交會或推估的柱（sv=2）橫向微調到車道外，三點以上交會的維持實測並標記
+                hit = True
+                if c['sv'] == 2:
+                    for k in range(1, 9):
+                        for sgn in (1, -1):
+                            d = sgn * k * .5
+                            nx, ny = c['p'][0] - math.sin(sv['a']) * d, c['p'][1] + math.cos(sv['a']) * d
+                            if hit and not lane_hit(nx, ny, 1.3):
+                                c = dict(c, p=[R2(nx), R2(ny)], moved=d)
+                                hit = False
+                print(' surveyed', c['id'], 'lane hit', 'kept' if hit else 'moved %.1f m' % c['moved'])
+                pier_fix['surveyed_lane'] = pier_fix.get('surveyed_lane', 0) + (1 if hit else 0)
+            piers.append({'p': c['p'], 'a': sv['a'], 'top': ref['top'], 'r': 0, 'g': 0, 'ext': ref['ext'], 'offs': [0.0],
+                          'cs': sv['cs'][c['row']], 'cap': [-w, w], 'sv': c['sv'], 'id': c['id']})
+        n_cols += len(sv['cols'])
+        n_old += len(old)
+    pier_fix['surveyed'] = n_cols
+    pier_fix['surveyed_replaced'] = n_old
+    pier_fix['surveyed_ranges'] = sv_ranges
 nb = len(boxes)
 boxes = [b for b in boxes if not (b['r'] == 'pier' and lane_hit(b['c'][0], b['c'][1], .9))]
 pier_fix['ramp_piers_dropped'] = nb - len(boxes)

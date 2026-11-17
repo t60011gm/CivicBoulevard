@@ -124,9 +124,9 @@ for p in OV['proposals']:
     if not fx and not mov and covered == 0:
         verdict += '（未判讀）'
     _svf = os.path.join(BASE, 'data/survey/piers_surveyed.json')
-    _rg = json.load(open(_svf))['range'] if os.path.exists(_svf) else None
+    _sec = [t for t in (json.load(open(_svf))['sections'] if os.path.exists(_svf) else []) if t['range'][0] <= (x0 + x1) / 2 <= t['range'][1]]
     rows.append({'id': p['id'], 'title': p['title'], 'zone': p['zone'], 'L': round(L), 'piers': len(ps),
-                 'sv': bool(_rg and _rg[0] <= (x0 + x1) / 2 <= _rg[1]),
+                 'sv': [_sec[0]['span'], _sec[0]['clear'], _sec[0].get('obs', '')] if _sec else None,
                  'fixed': {FIXED[k]: round(v) for k, v in fixed.items()}, 'movable': {MOVABLE[k]: round(v) for k, v in mov.items()},
                  'unsurveyed': round(L - covered), 'free_total': round(free_total), 'free_nopier': round(free_nopier), 'longest': round(best), 'mode': mode,
                  'need': need, 'why': why, 'width_fail': width_fail, 'verdict': verdict})
@@ -234,7 +234,9 @@ for r in rows:
     fx = sum(r['fixed'].values())
     c1 = '範圍內有 %d 排橋墩（間距約 30 m、柱寬 1.8–3.0 m，柱形依街景校正），橋墩之間無柱空間最長約 22 m。' % r['piers']
     if r.get('sv'):
-        c1 = '範圍內有 %d 排橋墩（街景逐墩判讀、多點交會定位，柱距約 30–32 m、柱寬約 2.5 m），橋墩之間無柱空間最長約 22 m。' % r['piers']
+        c1 = '範圍內有 %d 支橋柱（街景逐墩判讀、多點交會定位，南北兩排、同排柱距%s、柱寬約 2.5 m），橋墩之間無柱空間最長%s。' % (r['piers'], r['sv'][0], r['sv'][1])
+        if r['sv'][2]:
+            c1 += '【' + r['sv'][2].replace('：', '】', 1) + '。'
     if r['mode'] == 'clear':
         c1 += '此設施需要無柱淨空 %d m（%s），扣除後最長連續 %d m。' % (r['need'], r['why'], r['longest'])
     elif r['mode'] == 'area':

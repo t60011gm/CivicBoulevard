@@ -249,6 +249,8 @@ if os.path.exists(_corp):
         for o in q['offs']:
             COLS.append((q['p'][0] - math.sin(q['a']) * o, q['p'][1] + math.cos(q['a']) * o, q['cs'][1] if not q['r'] else q['cs'][0], q['r']))
     _old_form = pier_form
+    _svp = os.path.join(BASE, 'data/survey/piers_surveyed.json')
+    _SVSEC = json.load(open(_svp))['sections'] if os.path.exists(_svp) else []
 
     # 同一排 = 同一座橋墩的立柱，加上另一方向橋面在 x 前後 8 m 內的立柱
     ROWS = []
@@ -272,6 +274,9 @@ if os.path.exists(_corp):
             sp.append(max(lat) - min(lat))
         tw = sorted(v for v in sp if v >= 4)
         why = _old_form(x)[2] or '街景判讀'
+        for _t in _SVSEC:
+            if _t['range'][0] <= x <= _t['range'][1]:
+                why = _t['label'] + '街景逐墩判讀：南北兩排矩形柱'
         if len(tw) * 2 < len(sp):
             return near[0][0][3], 0, why
         return near[0][0][3], round(tw[len(tw) // 2], 1), why

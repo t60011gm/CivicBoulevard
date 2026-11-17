@@ -6,7 +6,7 @@ LAT0, LON0 = 25.0450, 121.5390
 KX = 111319.49 * math.cos(math.radians(LAT0)); KY = 111133.0
 F = 248.5  # 800x497 畫面、垂直視角 90° 的焦距（像素）
 
-def brg(h, px): return h + math.degrees(math.atan((px - 400) / F))
+def brg(h, px, f=F, cx=400): return h + math.degrees(math.atan((px - cx) / f))
 def xy(lat, lon): return ((lon - LON0) * KX, (lat - LAT0) * KY)
 
 def solve(obs):
@@ -24,9 +24,10 @@ def solve(obs):
 if __name__ == '__main__':
     S = json.load(open(os.path.join(BASE, 'data/survey', sys.argv[1])))
     P = {k: xy(*v) for k, v in S['panos'].items()}
+    f = S.get('F', F)  # 畫面高度的一半（垂直視角 90°）
     out = []
     for name, c in S['cols'].items():
-        obs = [(P[k][0], P[k][1], brg(h, px)) for k, h, px in c['obs']]
+        obs = [(P[k][0], P[k][1], brg(h, px, f)) for k, h, px in c['obs']]
         x, y, res = solve(obs)
         out.append({'id': name, 'p': [round(x, 1), round(y, 1)], 'n': len(obs), 'res': round(max(res), 2), **{k: v for k, v in c.items() if k != 'obs'}})
         print('%-5s x %8.1f y %6.1f  n %d  max residual %.2f m  %s' % (name, x, y, len(obs), max(res), c.get('note', '')))
